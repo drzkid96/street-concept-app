@@ -122,7 +122,7 @@ export async function autoExisting(path: LngLat[], onStep: (t: string) => void, 
     } catch (err) { pc = { ok: false, reason: (err as Error).message }; }
   }
   const b = blend(g.section, pc, widthTagged, oneway);
-  if (g.notes.some(n => n.includes('parking assumed'))) b.flags.unshift('OpenStreetMap has no parking tag here, so curb parking was assumed. Look at the photo: if nobody parks at the curb, remove the parking rows.');
+  if (g.notes.some(n => n.includes('parking assumed'))) b.flags.unshift('Curb parking is assumed (OpenStreetMap has no parking tag). It is drawn without T marks: existing markings only show when an aerial image confirms them.');
   return {
     key: pathKey(path), at: new Date().toISOString(),
     osm: { street: g.street, cls: g.cls, notes: g.notes, widthTagged, summary: osmSummary(g.section, oneway) },

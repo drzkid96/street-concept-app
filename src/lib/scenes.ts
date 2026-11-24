@@ -3,6 +3,7 @@
 import type { Section, SectionElement } from './types';
 import { split } from './roadway';
 import type { LngLat } from './providers';
+import { engine } from './engine';
 
 export type Frontage = 'residential' | 'commercial' | 'park';
 export const DEFAULT_SCENE = 'la-residential';
@@ -35,18 +36,20 @@ export function applyFrontage(sec: Section, scene: string | undefined, sw: { L: 
 export async function sceneFromLandUse(path: LngLat[]): Promise<{ scene: string; why: string }> {
   const mid = path[Math.floor(path.length / 2)] ?? path[0];
   if (!mid) return { scene: DEFAULT_SCENE, why: 'default' };
-  const [x, y] = mid, r = 120;
+  const [x, y] = mid, r = 150;
   const q = `[out:json][timeout:20];(way(around:${r},${y},${x})[landuse];relation(around:${r},${y},${x})[landuse];way(around:${r},${y},${x})[leisure~"^(park|golf_course|nature_reserve|recreation_ground)$"];relation(around:${r},${y},${x})[leisure~"^(park|nature_reserve)$"];way(around:${r},${y},${x})[natural~"^(wood|scrub|grassland)$"];node(around:${r},${y},${x})[shop];way(around:${r},${y},${x})[building~"^(retail|commercial|office|supermarket)$"];way(around:${r},${y},${x})[building~"^(house|residential|apartments|detached)$"];);out tags;`;
   try {
-    const j = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: 'data=' + encodeURIComponent(q), signal: AbortSignal.timeout(20000) }).then(r => r.json());
+    void q;
+    const j = await engine.json('/api/landuse', { lat: y, lon: x, radius: 150 });
     let park = 0, com = 0, res = 0;
     for (const e of j.elements ?? []) {
       const t = e.tags ?? {};
-      if (/^(park|golf_course|nature_reserve|recreation_ground)$/.test(t.leisure ?? '') || /^(forest|grass|meadow|recreation_ground)$/.test(t.landuse ?? '') || t.natural) park += 3;
-      if (/^(commercial|retail)$/.test(t.landuse ?? '')) com += 3;
+      const w = e.type === 'area' ? 3 : 1;   // an area the segment sits inside counts most
+      if (/^(park|golf_course|nature_reserve|recreation_ground)$/.test(t.leisure ?? '') || /^(forest|grass|meadow|recreation_ground)$/.test(t.landuse ?? '') || t.natural) park += 3 * w;
+      if (/^(commercial|retail)$/.test(t.landuse ?? '')) com += 3 * w;
       if (t.shop) com += 1;
       if (/^(retail|commercial|office|supermarket)$/.test(t.building ?? '')) com += 1;
-      if (t.landuse === 'residential') res += 3;
+      if (t.landuse === 'residential') res += 3 * w;
       if (/^(house|residential|apartments|detached)$/.test(t.building ?? '')) res += 0.5;
     }
     const best = Math.max(park, com, res);

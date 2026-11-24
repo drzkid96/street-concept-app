@@ -65,8 +65,8 @@ export function build(cls: string, t: Tags): { section: Section; notes: string[]
     if (s.bike === 'lane') a.push({ type: 'bike_lane', width_ft: 6, direction: dir, material: 'green' });
     return outer ? a : a.reverse();
   };
-  // left side of the section = inbound (backward) side
-  els.push(...edge(L, 'inbound', true));
+  // left side of the section = inbound (backward) side; on a one-way street both sides face the direction of travel
+  els.push(...edge(L, oneway ? 'outbound' : 'inbound', true));
   for (let i = 0; i < bwd; i++) els.push({ type: bus && i === 0 && !oneway ? 'bus_lane' : 'travel_lane', width_ft: bus && i === 0 && !oneway ? 11 : laneW, direction: 'inbound' });
   if (ctl) els.push({ type: 'turn_lane', width_ft: 10, direction: 'both' });
   for (let i = 0; i < fwd; i++) els.push({ type: bus && i === fwd - 1 ? 'bus_lane' : 'travel_lane', width_ft: bus && i === fwd - 1 ? 11 : laneW, direction: 'outbound' });
