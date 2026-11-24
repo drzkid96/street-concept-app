@@ -89,7 +89,7 @@ export const siteStage: Stage = {
       mv.setMarks(clicks);
       if (clicks.length < 2) { mv.setPath([...clicks]); hint(clicks.length ? 'Now click the end of the segment' : 'Click the start of the segment'); return; }
       hint(''); msg('Following the street…');
-      try { const p = await snap(clicks); if (mine === busy && gen === live.gen) { mv.setPath(p); msg(''); keymap(); locate(p); } }
+      try { const p = await snap(clicks); if (mine === busy && gen === live.gen) { mv.setPath(p); msg(''); project.update(() => { if (seg.perspective && seg.perspective.source !== 'Upload') delete seg.perspective; }); keymap(); locate(p); } }
       catch (err) { if (mine === busy) { mv.setPath([...clicks]); msg('Could not follow the street, so the line is straight: ' + (err as Error).message); } }
     };
     const locate = async (p: LngLat[]) => {

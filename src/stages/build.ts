@@ -1,5 +1,5 @@
 // Build: every input is gathered in steps 1 to 5. Here the person picks the outputs and builds them in one run.
-import { live, repaintNav, type Stage } from './index';
+import { live, repaintNav, goTo, type Stage } from './index';
 import { project } from '../lib/project';
 import { engine, outputsStore } from '../lib/engine';
 import { head, task, more, esc } from './ui';
@@ -18,7 +18,7 @@ export const buildStage: Stage = {
     const seg = project.seg();
     const inputs: [boolean, string, string, string][] = [
       [(seg.path?.length ?? 0) > 1, 'Segment and setting', 'site', 'Mark the segment in Site.'],
-      [!!seg.existingChecked, 'Existing street confirmed', 'existing', 'Confirm the existing street.'],
+      [!!seg.existingChecked, 'Existing street confirmed', 'existing', 'Press Next on the Existing step.'],
       [seg.alternatives.some(a => a.enabled !== false), `${seg.alternatives.filter(a => a.enabled !== false).length || 'No'} alternative${seg.alternatives.filter(a => a.enabled !== false).length === 1 ? '' : 's'} switched on`, 'alts', 'Switch on at least one alternative.'],
       [!!seg.perspective, 'Photo approved', 'photo', 'Approve a photo.'],
       [!!outputsStore.curbs?.approved, 'Curbs approved', 'visualize', 'Approve the curbs.']
@@ -84,6 +84,7 @@ export const buildStage: Stage = {
         } catch (err) { log[log.length - 1] = 'AI handoff ZIP: stopped. ' + (err as Error).message; }
       }
       building = false; repaintNav();
+      if (gen === live.gen && (outputsStore.concepts || outputsStore.streetview)) { goTo('sheets'); return; }
       if (gen === live.gen) { paint(); showCanvas(); }
     }
     paint(); showCanvas();

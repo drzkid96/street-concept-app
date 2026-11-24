@@ -15,8 +15,9 @@ import { conformTo } from '../lib/roadway';
 import { SCENES, DEFAULT_SCENE, applyFrontage } from '../lib/scenes';
 import type { Alternative } from '../lib/types';
 
-export interface Stage { id: string; name: string; done?: () => boolean; render(side: HTMLElement, canvas: HTMLElement): void | Promise<void>; dispose?: () => void }
+export interface Stage { id: string; name: string; done?: () => boolean; ready?: () => boolean; confirm?: () => void; render(side: HTMLElement, canvas: HTMLElement): void | Promise<void>; dispose?: () => void }
 export const repaintNav = () => (window as any).__repaintNav?.();
+export const goTo = (id: string) => (window as any).__go?.(id);
 // Incremented on every stage change; async renders compare against it and stop if the user moved on.
 export const live = { gen: 0 };
 
@@ -26,6 +27,9 @@ let autoRunning = '';
 const existing: Stage = {
   id: 'existing', name: 'Existing',
   done: () => !!project.seg().existingChecked,
+  // Next is the confirmation: no separate tick box.
+  ready: () => { const g = project.seg(); return (g.path?.length ?? 0) > 1 && !!g.existingAuto && g.existing.elements.length > 0; },
+  confirm: () => project.update(() => { project.seg().existingChecked = true; }),
   render(side, canvas) {
     existing.dispose?.();
     const seg = project.seg();
@@ -53,14 +57,13 @@ const existing: Stage = {
           <span class="note">${a?.sceneWhy ? `Picked from ${esc(a.sceneWhy)}. ` : ''}Sidewalks follow the frontage.</span></div>
 
         <div id="ed"></div>
-        <label class="check-row"><input type="checkbox" id="ok"${seg.existingChecked ? ' checked' : ''}${stale ? ' disabled' : ''}> This matches the street today</label>`)}`;
+<p class="note">When it matches the street, press <b>Next</b>.</p>`)}`;
     if (!stale && seg.settingPinned && a && a.scene !== seg.setting) project.update(() => { applyFrontage(seg.existing, seg.setting, a.sidewalks); a.scene = seg.setting!; a.sceneWhy = 'your choice in Site'; seg.alternatives.forEach(x => conformTo(x.section, seg.existing)); });
     canvas.innerHTML = '<div class="ex-split"><div id="aer"></div><div id="secHost"></div></div>';
     const stopMap = has ? aerialMini(canvas.querySelector('#aer') as HTMLElement, path) : null;
     existing.dispose = () => stopMap?.();
     const draw = () => showSections(canvas.querySelector('#secHost') as HTMLElement, [{ id: 'ex', title: `${seg.limits.from || 'Segment'}: existing`, section: seg.existing, existing: true }], seg.setting);
     sectionEditor(side.querySelector('#ed') as HTMLElement, seg.existing, () => { project.update(() => { seg.alternatives.forEach(x => conformTo(x.section, seg.existing)); }); draw(); }, { existing: true });
-    side.querySelector('#ok')!.addEventListener('change', e => { project.update(() => { seg.existingChecked = (e.target as HTMLInputElement).checked; }); repaintNav(); existing.render(side, canvas); });
     side.querySelector('#scene')?.addEventListener('change', e => { project.update(() => { seg.setting = (e.target as HTMLSelectElement).value; seg.settingPinned = true; applyFrontage(seg.existing, seg.setting, a?.sidewalks); if (a) { a.scene = seg.setting; a.sceneWhy = 'your choice'; } seg.alternatives.forEach(x => conformTo(x.section, seg.existing)); }); existing.render(side, canvas); });
     side.querySelector('#again')?.addEventListener('click', () => { project.update(() => { delete seg.existingAuto; seg.existingChecked = false; }); existing.render(side, canvas); });
     draw();

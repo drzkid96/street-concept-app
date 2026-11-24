@@ -1,7 +1,7 @@
 // Render: photo → curbs (person approves, AI optional) → fp-render-streetview renders and concept sheet.
 // The Curb Guide is the fp-render-curbs page served unchanged; the engine's bridge script reports its
 // state here and takes Approve / Accept / Clear commands, so the whole flow is driven from this sidebar.
-import { live, repaintNav, type Stage } from './index';
+import { live, repaintNav, goTo, type Stage } from './index';
 import { project } from '../lib/project';
 import { engine, outputsStore, type CurbStatus } from '../lib/engine';
 import { settings, saveSettings, streetImage, bearing, type LngLat } from '../lib/providers';
@@ -95,7 +95,7 @@ export const visualizeStage: Stage = {
         <div class="row"><button class="btn" id="approve"${s.done ? '' : ' disabled'}>${allAi ? 'Accept AI curbs' : 'Approve curbs'}</button>
           ${c.mode === 'ai' && s.Lai + s.Rai > 0 ? '<button class="btn ghost" id="clearai">Remove AI suggestions</button>' : ''}</div>
         ${s.done ? '' : `<p class="note">To approve, finish ${missing.join(', ')}.</p>`}
-        <div class="row"><button class="linkbtn" id="restart">Start over with a different method</button></div>`;
+        <div class="row">${c.mode === 'manual' ? '<button class="linkbtn" id="useai">Let AI suggest the curbs instead</button>' : '<button class="linkbtn" id="restart">Clear and mark them myself</button>'}</div>`;
     }
 
     // ---------- canvas
@@ -110,6 +110,23 @@ export const visualizeStage: Stage = {
     };
     const send = (m: object) => { const c = cb(); const f = canvas.querySelector('iframe.guide') as HTMLIFrameElement | null; if (c && f?.contentWindow) f.contentWindow.postMessage({ job: c.job, ...m }, '*'); };
 
+    let starting = false;
+    async function startCurbs(choice: 'manual' | 'ai') {
+      if (!p || starting) return;
+      starting = true; curbChoice = choice;
+      msgText = choice === 'ai' ? 'Finding the curbs…' : 'Opening the photo…'; paint();
+      try {
+        const blob = await fetch(p.src).then(r => { if (!r.ok) throw new Error(`Photo ${r.status}`); return r.blob(); });
+        const fd = new FormData(); fd.append('photo', blob, 'photo.jpg'); fd.append('width', String(road)); fd.append('prefill', choice === 'ai' ? 'auto' : 'none');
+        const r = await engine.form('/api/curbs/helper', fd);
+        starting = false;
+        if (gen !== live.gen) return;
+        if (!r.ok) throw new Error('The curb tool stopped: ' + String(r.log || '').split('\n').slice(-2).join(' '));
+        outputsStore.curbs = { job: r.job, mode: choice, guide: r.guide, approved: false, photo: p.src };
+        outputsStore.streetview = undefined;
+        msgText = ''; paint(); showCanvas(); repaintNav();
+      } catch (err) { starting = false; msgText = (err as Error).message; paint(); }
+    }
     // ---------- events
     function wire() {
       const $ = (q: string) => side.querySelector(q) as HTMLElement | null;
@@ -136,28 +153,15 @@ export const visualizeStage: Stage = {
         catch (err) { say((err as Error).message); }
       });
       side.querySelectorAll<HTMLInputElement>('input[name=cm]').forEach(r => r.addEventListener('change', () => { curbChoice = r.value as typeof curbChoice; const b = $('#start'); if (b) b.textContent = curbChoice === 'ai' ? 'Find curbs with AI' : 'Start marking'; }));
-      $('#start')?.addEventListener('click', async () => {
-        if (!p) return;
-        const b = $('#start') as HTMLButtonElement; b.disabled = true;
-        say(curbChoice === 'ai' ? 'Finding the curbs…' : 'Opening the photo…');
-        try {
-          const blob = await fetch(p.src).then(r => { if (!r.ok) throw new Error(`Photo ${r.status}`); return r.blob(); });
-          const fd = new FormData(); fd.append('photo', blob, 'photo.jpg'); fd.append('width', (side.querySelector('#w') as HTMLInputElement).value); fd.append('prefill', curbChoice === 'ai' ? 'auto' : 'none');
-          const r = await engine.form('/api/curbs/helper', fd);
-          if (gen !== live.gen) return;
-          if (!r.ok) throw new Error('The curb tool stopped: ' + String(r.log || '').split('\n').slice(-2).join(' '));
-          outputsStore.curbs = { job: r.job, mode: curbChoice, guide: r.guide, approved: false, photo: p.src };
-          outputsStore.streetview = undefined;
-          msgText = ''; paint(); showCanvas(); repaintNav();
-        } catch (err) { say((err as Error).message); b.disabled = false; }
-      });
+      $('#start')?.addEventListener('click', () => startCurbs(curbChoice));
+      $('#useai')?.addEventListener('click', () => startCurbs('ai'));
       side.querySelectorAll<HTMLElement>('[data-z]').forEach(b => b.addEventListener('click', () => send({ cmd: b.dataset.z })));
       side.querySelectorAll<HTMLElement>('[data-tool]').forEach(b => b.addEventListener('click', () => send({ cmd: 'tool', tool: b.dataset.tool })));
       $('#undo')?.addEventListener('click', () => send({ cmd: 'undo' }));
       $('#clearai')?.addEventListener('click', () => send({ cmd: 'clear-ai' }));
       $('#approve')?.addEventListener('click', () => { say('Saving the curbs…'); send({ cmd: cb()?.mode === 'ai' ? 'accept-ai' : 'approve' }); });
       $('#edit')?.addEventListener('click', () => { const c = cb(); if (!c) return; c.approved = false; outputsStore.streetview = undefined; msgText = ''; paint(); showCanvas(); repaintNav(); });
-      $('#restart')?.addEventListener('click', () => { outputsStore.curbs = undefined; outputsStore.streetview = undefined; msgText = ''; paint(); showCanvas(); repaintNav(); });
+      $('#restart')?.addEventListener('click', () => { outputsStore.curbs = undefined; outputsStore.streetview = undefined; startCurbs('manual'); });
       $('#src')?.addEventListener('change', e => { settings.street = (e.target as HTMLSelectElement).value as typeof settings.street; saveSettings(); const w = $('#mlyWrap'); if (w) w.hidden = settings.street !== 'mapillary'; });
       $('#mly')?.addEventListener('change', e => { settings.mapillaryToken = (e.target as HTMLInputElement).value.trim(); saveSettings(); });
       $('#look')?.addEventListener('change', e => { look = (e.target as HTMLSelectElement).value; outputsStore.look = look; });
@@ -168,11 +172,12 @@ export const visualizeStage: Stage = {
       const c = cb(), d = ev.data;
       if (!c || !d || d.job !== c.job) return;
       if (d.type === 'curbs-status') { const { type, job, ...s } = d; void type; void job; c.status = s as CurbStatus; if (!c.approved) paint(); }
-      else if (d.type === 'curbs-approved') { c.approved = true; msgText = 'Curbs approved. All inputs for the renderings are in. Next: Build.'; paint(); repaintNav(); }
+      else if (d.type === 'curbs-approved') { c.approved = true; repaintNav(); goTo('build'); }
       else if (d.type === 'curbs-error') { msgText = d.text; paint(); }
     };
     window.addEventListener('message', onMsg);
     visualizeStage.dispose = () => window.removeEventListener('message', onMsg);
     paint(); showCanvas();
+    if (p && !cb()) startCurbs('manual');   // marking opens right away; AI is one click in the panel
   }
 };

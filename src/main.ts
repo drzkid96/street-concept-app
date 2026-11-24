@@ -22,10 +22,11 @@ const paintNav = (id: string) => {
   }).join('');
   const i = STAGES.findIndex(s => s.id === id), prev = STAGES[i - 1], next = STAGES[i + 1];
   stepnav.innerHTML = `${prev ? `<button class="btn ghost" data-go="${prev.id}">← ${prev.name}</button>` : '<span></span>'}
-    ${next ? `<button class="btn" data-go="${next.id}"${i + 1 > open ? ' disabled title="Finish this step first"' : ''}>Next: ${next.name} →</button>` : ''}`;
+    ${next ? `<button class="btn" data-go="${next.id}"${i + 1 > open && !(i === open && STAGES[i].ready?.()) ? ' disabled title="Finish this step first"' : ''}>Next: ${next.name} →</button>` : ''}`;
 };
-stepnav.addEventListener('click', e => { const b = (e.target as HTMLElement).closest('[data-go]') as HTMLElement | null; if (b) go(b.dataset.go!); });
+stepnav.addEventListener('click', e => { const b = (e.target as HTMLElement).closest('[data-go]') as HTMLElement | null; if (!b) return; const cur = current; if (cur && !cur.done?.() && cur.ready?.() && STAGES.indexOf(cur) < STAGES.findIndex(x => x.id === b.dataset.go)) cur.confirm?.(); go(b.dataset.go!); });
 // Stages call this after finishing something so the step ticks update without leaving the step.
+(window as any).__go = (id: string) => go(id);
 (window as any).__repaintNav = () => paintNav(current?.id ?? 'site');
 
 function go(id: string) {

@@ -1,6 +1,6 @@
 // Photo: upload, or an interactive Google Street View at the segment start. Nothing is captured until the
 // person presses "Use this view".
-import { live, repaintNav, type Stage } from './index';
+import { live, repaintNav, goTo, type Stage } from './index';
 import { project } from '../lib/project';
 import { outputsStore } from '../lib/engine';
 import { bearing, type LngLat } from '../lib/providers';
@@ -33,7 +33,7 @@ export const photoStage: Stage = {
     const setPhoto = (ph: NonNullable<typeof p>) => {
       project.update(() => { seg.perspective = ph; });
       outputsStore.curbs = undefined; outputsStore.streetview = undefined;   // new photo: curbs start over
-      mode = 'idle'; repaintNav(); photoStage.render(side, canvas);
+      mode = 'idle'; repaintNav(); goTo('visualize');   // approved: straight on to the curbs
     };
     const paint = () => {
       const picking = !p || mode === 'sv';
@@ -83,6 +83,7 @@ export const photoStage: Stage = {
         say('');
       } catch (err) { canvas.innerHTML = '<div class="empty">Street View is not available here. Upload a photo instead.</div>'; say((err as Error).message || 'No Street View here.'); }
     }
+    if (!p && path.length) mode = 'sv';   // no photo yet: Street View opens right away
     paint();
     if (mode === 'sv') openSv();
     else if (p) canvas.innerHTML = `<div class="persp-wrap"><figure class="persp"><img src="${esc(p.src)}" alt="Approved photo"><figcaption>${esc(p.source)}${p.credit ? ' · ' + esc(p.credit) : ''}. Next: Curbs.</figcaption></figure></div>`;
