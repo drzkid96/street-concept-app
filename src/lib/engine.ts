@@ -10,7 +10,7 @@ export const engine = {
   async check(): Promise<boolean> {
     if (this.url === '' && location.hostname.endsWith('github.io')) { this.health = null; listeners.forEach(f => f()); return false; }
     try {
-      const r = await fetch(this.url + '/api/health', { signal: AbortSignal.timeout(2500) });
+      const r = await fetch(this.url + '/api/health', { signal: AbortSignal.timeout(8000) });
       this.health = r.ok ? await r.json() : null;
     } catch { this.health = null; }
     listeners.forEach(f => f());
@@ -35,4 +35,9 @@ export const onEngine = (f: () => void) => { listeners.add(f); return () => list
 
 export interface EngineFile { name: string; url: string; bytes: number }
 // Last engine outputs for this browser session, shared by Cost, Visualize, Sheets and Review.
-export const outputsStore: { concepts?: { job: string; pdf: string; png?: string; summary: string[] }; streetview?: { job: string; pdfs: EngineFile[] }; curbJob?: string } = {};
+export interface CurbStatus { hz: boolean; L: number; R: number; Lai: number; Rai: number; done: boolean }
+export const outputsStore: {
+  concepts?: { job: string; pdf: string; png?: string; summary: string[] };
+  streetview?: { job: string; pdfs: EngineFile[]; renders: EngineFile[] };
+  curbs?: { job: string; mode: 'manual' | 'ai'; guide: string; approved: boolean; status?: CurbStatus; photo: string };
+} = {};

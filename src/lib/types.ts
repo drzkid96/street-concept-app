@@ -28,12 +28,14 @@ export interface Segment {
   length_ft: number;
   location?: { lat: number; lng: number; heading?: number; pano_id?: string };
   path?: [number, number][];
+  clicks?: [number, number][]; // the person's start/end (and any middle) clicks; path is snapped through them
   grade_pct?: number;
   perspective?: Perspective;
   keymap?: string; // data URL snapshot from Site
   curbPts?: [number, number][]; // left/right curb at image bottom, fractions
   curbs: unknown[];
   existing: Section;
+  existingChecked?: boolean;
   alternatives: Alternative[];
 }
 

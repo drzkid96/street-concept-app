@@ -11,17 +11,30 @@ let canvas = document.getElementById('canvas')!;
 let current: Stage | null = null;
 const name = document.getElementById('proj-name') as HTMLInputElement;
 
-nav.innerHTML = STAGES.map((s, i) => `<button data-id="${s.id}"><span class="n">${i + 1}</span>${s.name.toUpperCase()}</button>`).join('');
+const stepnav = document.getElementById('stepnav')!;
+const paintNav = (id: string) => {
+  nav.innerHTML = STAGES.map((s, i) => {
+    const done = s.done?.() ?? false;
+    return `<button data-id="${s.id}" aria-current="${s.id === id}" class="${done ? 'done' : ''}"><span class="n">${done ? '✓' : i + 1}</span>${s.name.toUpperCase()}</button>`;
+  }).join('');
+  const i = STAGES.findIndex(s => s.id === id), prev = STAGES[i - 1], next = STAGES[i + 1];
+  stepnav.innerHTML = `${prev ? `<button class="btn ghost" data-go="${prev.id}">← ${prev.name}</button>` : '<span></span>'}
+    ${next ? `<button class="btn" data-go="${next.id}">Next: ${next.name} →</button>` : ''}`;
+};
+stepnav.addEventListener('click', e => { const b = (e.target as HTMLElement).closest('[data-go]') as HTMLElement | null; if (b) go(b.dataset.go!); });
+// Stages call this after finishing something so the step ticks update without leaving the step.
+(window as any).__repaintNav = () => paintNav(current?.id ?? 'site');
 
 function go(id: string) {
   const s = STAGES.find(x => x.id === id) ?? STAGES[0];
-  nav.querySelectorAll('button').forEach(b => b.setAttribute('aria-current', String(b.dataset.id === s.id)));
+  paintNav(s.id);
   if (location.hash !== '#' + s.id) history.replaceState(null, '', '#' + s.id);
   // Clean up the previous stage (maps, timers) and start from fresh panels so no listeners carry over.
   try { current?.dispose?.(); } catch (err) { console.warn(err); }
   live.gen++;
   const ns = side.cloneNode(false) as HTMLElement, nc = canvas.cloneNode(false) as HTMLElement;
   side.replaceWith(ns); canvas.replaceWith(nc); side = ns; canvas = nc;
+  side.scrollTop = 0;
   current = s;
   Promise.resolve(s.render(side, canvas)).catch(err => {
     console.error(err);

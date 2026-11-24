@@ -1,76 +1,93 @@
-import type { Stage } from './index';
+import { live, repaintNav, type Stage } from './index';
 import { project } from '../lib/project';
 import { MapView } from '../lib/mapView';
-import { BASEMAPS, settings, saveSettings, geocode, snap, elevationFt, lengthFt, bearing, streetImage, type LngLat, type StreetImage } from '../lib/providers';
+import { BASEMAPS, settings, saveSettings, geocode, snap, elevationFt, lengthFt, bearing, type LngLat } from '../lib/providers';
+import { head, task, more, esc } from './ui';
 
-const esc = (t: string) => t.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 const opt = (v: string, label: string, cur: string) => `<option value="${v}"${v === cur ? ' selected' : ''}>${label}</option>`;
 
 export const siteStage: Stage = {
   id: 'site', name: 'Site',
+  done: () => (project.seg().path?.length ?? 0) > 1,
   render(side, canvas) {
+    const gen = live.gen;
     const seg = project.seg();
-    side.innerHTML = `<h2>1. SITE</h2>
-      <form id="sf" class="field"><label for="q">Search address or intersection</label>
-        <div class="row" style="margin:0"><input id="q" placeholder="Sunset Blvd and Vermont Ave" style="flex:1 1 180px">
-        <select id="geo" class="sel" style="flex:0 1 150px" aria-label="Search provider">${opt('auto', 'Auto (open first)', settings.geocoder)}${opt('nominatim', 'OpenStreetMap', settings.geocoder)}${opt('google', 'Google Places', settings.geocoder)}</select>
-        <button class="btn">Search</button></div></form>
-      <ul id="res" class="results"></ul>
-      <div class="field"><label for="bm">Basemap</label><select id="bm">${BASEMAPS.map(b => opt(b.id, b.label, settings.basemap)).join('')}</select></div>
-      <div class="row"><input id="from" class="sel" placeholder="Limit from" value="${esc(seg.limits.from)}" aria-label="Limit from"><input id="to" class="sel" placeholder="Limit to" value="${esc(seg.limits.to)}" aria-label="Limit to"></div>
-      <h3 style="margin-top:1rem">SEGMENT</h3>
-      <p class="note">Click the map to place points along the corridor.</p>
-      <div class="row">
-        <select id="snapP" class="sel" style="flex:0 1 150px" aria-label="Snap provider">${opt('osrm', 'Snap: OSRM', settings.snap)}${opt('google', 'Snap: Google Roads', settings.snap)}</select>
-        <button class="btn ghost" id="snap">Snap to street</button><button class="btn ghost" id="km">Save key map</button><button class="btn ghost" id="undo">Undo</button><button class="btn ghost" id="clear">Clear</button>
-      </div>
-      <table><tbody>
-        <tr><td>Length</td><td class="num" id="len">—</td></tr>
-        <tr><td>Grade (end to end, USGS 3DEP)</td><td class="num" id="grade">—</td></tr>
-      </tbody></table>
-      <h3 style="margin-top:1rem">STREET-LEVEL VIEW</h3>
-      <div class="row">
-        <select id="sv" class="sel" aria-label="Street imagery source">${opt('google', 'Google Street View', settings.street)}${opt('panoramax', 'Panoramax (open)', settings.street)}${opt('mapillary', 'Mapillary (token)', settings.street)}</select>
-        <button class="btn" id="cap">Capture at start</button>
-      </div>
-      <div class="field" id="mlyWrap" ${settings.street === 'mapillary' ? '' : 'hidden'}><label for="mly">Mapillary access token</label><input id="mly" type="password" value="${esc(settings.mapillaryToken)}" autocomplete="off"></div>
-      <div id="svOut"></div>
+    const path = (seg.path ?? []) as LngLat[];
+    let clicks: LngLat[] = (seg.clicks as LngLat[] | undefined) ?? (path.length > 1 ? [path[0], path[path.length - 1]] : [...path]);
+    const has = path.length > 1;
+    side.innerHTML = `${head(1, 'Site', 'Find the street and mark the stretch you are studying.')}
+      ${task(1, 'Find the street', has ? 'done' : 'now', `
+        <form id="sf" class="row"><input id="q" class="sel" placeholder="Address, street or intersection" aria-label="Search"><button class="btn">Search</button></form>
+        <ul id="res" class="results"></ul>`)}
+      ${task(2, 'Mark the segment', has ? 'done' : 'now', `
+        <p class="note">Click on the map where the segment <b>starts</b>, then where it <b>ends</b>. The line follows the street. Click again to extend it.</p>
+        <div class="row"><button class="btn ghost" id="undo">Undo last click</button><button class="btn ghost" id="clear">Start over</button></div>
+        <dl class="facts"><div><dt>Length</dt><dd id="len">—</dd></div><div><dt>Grade</dt><dd id="grade">—</dd></div></dl>`)}
+      ${more(`
+        <div class="field"><label for="from">Street name (for sheet titles)</label><input id="from" value="${esc(seg.limits.from)}"></div>
+        <div class="field"><label for="to">Limits (for example "Los Feliz Blvd to Riverside Dr")</label><input id="to" value="${esc(seg.limits.to)}"></div>
+        <div class="field"><label for="bm">Map style</label><select id="bm">${BASEMAPS.map(b => opt(b.id, b.label, settings.basemap)).join('')}</select></div>
+        <div class="field"><label for="geo">Search with</label><select id="geo">${opt('auto', 'OpenStreetMap, then Google', settings.geocoder)}${opt('nominatim', 'OpenStreetMap only', settings.geocoder)}${opt('google', 'Google only', settings.geocoder)}</select></div>
+        <div class="field"><label for="snapP">Follow streets with</label><select id="snapP">${opt('osrm', 'OpenStreetMap routing', settings.snap)}${opt('google', 'Google Roads', settings.snap)}</select></div>`)}
       <p id="msg" class="note" role="status"></p>`;
 
-    canvas.innerHTML = `<div class="map" id="map"></div>`;
-    let gradeTimer = 0;
-    const path = (seg.path ?? []) as LngLat[];
-    siteStage.dispose = () => { clearTimeout(gradeTimer); mv.map.remove(); };
+    canvas.innerHTML = `<div class="map" id="map"></div><div class="maphint" id="hint"${has ? ' hidden' : ''}>Click the start of the segment</div>`;
+    let gradeTimer = 0, busy = 0;
     const mv = new MapView(canvas.querySelector('#map') as HTMLElement, seg.location ? [seg.location.lng, seg.location.lat] : undefined, [...path]);
+    siteStage.dispose = () => { clearTimeout(gradeTimer); mv.map.remove(); };
     const $ = <T extends HTMLElement>(s: string) => side.querySelector(s) as T;
     const msg = (t: string) => { $('#msg').textContent = t; };
+    const hint = (t: string) => { const h = canvas.querySelector('#hint') as HTMLElement; h.hidden = !t; h.textContent = t; };
 
-    const refresh = async (p: LngLat[]) => {
+    const keymap = () => {
+      // Snapshot of the current map view for the sheets, taken once the tiles have drawn.
+      let done = false;
+      const grab = () => {
+        if (done || gen !== live.gen) return; done = true;
+        try {
+          const src = mv.map.getCanvas(), c = document.createElement('canvas'), k = Math.min(1, 1400 / src.width);
+          c.width = src.width * k; c.height = src.height * k; c.getContext('2d')!.drawImage(src, 0, 0, c.width, c.height);
+          project.update(() => { seg.keymap = c.toDataURL('image/jpeg', 0.85); });
+        } catch { /* keymap is optional */ }
+      };
+      mv.map.once('idle', grab); setTimeout(grab, 3000);
+    };
+    const show = (p: LngLat[]) => {
       const len = Math.round(lengthFt(p));
       project.update(() => {
-        seg.path = p.map(c => [c[0], c[1]]);
-        seg.length_ft = len;
+        seg.path = p.map(c => [c[0], c[1]]); seg.clicks = clicks.map(c => [c[0], c[1]]); seg.length_ft = len;
         if (p[0]) seg.location = { lng: p[0][0], lat: p[0][1], heading: p[1] ? bearing(p[0], p[1]) : undefined };
       });
-      $('#len').textContent = len ? `${len.toLocaleString()}'` : '—';
+      $('#len').textContent = len ? `${len.toLocaleString()} ft` : '—';
       $('#grade').textContent = seg.grade_pct != null && p.length > 1 ? `${seg.grade_pct.toFixed(1)}%` : '—';
+      repaintNav();
     };
     mv.onChange = p => {
-      refresh(p);
+      show(p);
       clearTimeout(gradeTimer);
       if (p.length > 1) gradeTimer = window.setTimeout(async () => {
         const [a, b] = await Promise.all([elevationFt(p[0]), elevationFt(p[p.length - 1])]);
         const L = lengthFt(p);
-        if (a != null && b != null && L > 0) { project.update(() => { seg.grade_pct = ((b - a) / L) * 100; }); $('#grade').textContent = `${seg.grade_pct!.toFixed(1)}% (${Math.round(a)}' → ${Math.round(b)}')`; }
+        if (gen === live.gen && a != null && b != null && L > 0) { project.update(() => { seg.grade_pct = ((b - a) / L) * 100; }); $('#grade').textContent = `${seg.grade_pct!.toFixed(1)}%`; }
       }, 600);
     };
-    refresh(path);
+    const resnap = async () => {
+      const mine = ++busy;
+      mv.setMarks(clicks);
+      if (clicks.length < 2) { mv.setPath([...clicks]); hint(clicks.length ? 'Now click the end of the segment' : 'Click the start of the segment'); return; }
+      hint(''); msg('Following the street…');
+      try { const p = await snap(clicks); if (mine === busy && gen === live.gen) { mv.setPath(p); msg(''); keymap(); } }
+      catch (err) { if (mine === busy) { mv.setPath([...clicks]); msg('Could not follow the street, so the line is straight: ' + (err as Error).message); } }
+    };
+    mv.onPick = at => { clicks.push(at); resnap(); };
+    mv.setMarks(clicks);
+    show(path);
 
+    $('#undo').addEventListener('click', () => { clicks.pop(); resnap(); });
+    $('#clear').addEventListener('click', () => { clicks = []; resnap(); });
     $('#bm').addEventListener('change', e => mv.setBasemap((e.target as HTMLSelectElement).value));
     $('#geo').addEventListener('change', e => { settings.geocoder = (e.target as HTMLSelectElement).value as typeof settings.geocoder; saveSettings(); });
-    $('#snapP').addEventListener('change', e => { settings.snap = (e.target as HTMLSelectElement).value as typeof settings.snap; saveSettings(); });
-    $('#sv').addEventListener('change', e => { settings.street = (e.target as HTMLSelectElement).value as typeof settings.street; saveSettings(); $('#mlyWrap').hidden = settings.street !== 'mapillary'; });
-    $('#mly').addEventListener('change', e => { settings.mapillaryToken = (e.target as HTMLInputElement).value.trim(); saveSettings(); });
+    $('#snapP').addEventListener('change', e => { settings.snap = (e.target as HTMLSelectElement).value as typeof settings.snap; saveSettings(); if (clicks.length > 1) resnap(); });
     (['from', 'to'] as const).forEach(k => $('#' + k).addEventListener('change', e => project.update(() => { seg.limits[k] = (e.target as HTMLInputElement).value; })));
 
     $('#sf').addEventListener('submit', async e => {
@@ -80,62 +97,12 @@ export const siteStage: Stage = {
       msg('Searching…');
       try {
         const res = await geocode(q);
-        $('#res').innerHTML = res.map((r, i) => `<li><button type="button" data-i="${i}">${esc(r.label)}</button></li>`).join('') || '<li class="note">No results</li>';
+        if (gen !== live.gen) return;
+        $('#res').innerHTML = res.slice(0, 5).map((r, i) => `<li><button type="button" data-i="${i}">${esc(r.label)}</button></li>`).join('') || '<li class="note">Nothing found. Try a cross street or a full address.</li>';
         $('#res').onclick = ev => { const b = (ev.target as HTMLElement).closest('button[data-i]') as HTMLElement | null; if (b) mv.flyTo(res[+b.dataset.i!].at); };
         if (res[0]) mv.flyTo(res[0].at);
-        msg(res[0] ? `Search by ${res[0].by}${res[0].by.startsWith('Open') ? ' © OpenStreetMap contributors' : ''}` : 'No results from any source');
+        msg(res[0] ? `Found with ${res[0].by}. Pick another result if this is the wrong place.` : '');
       } catch (err) { msg(String((err as Error).message)); }
     });
-    $('#snap').addEventListener('click', async () => {
-      msg('Snapping…');
-      try { mv.setPath(await snap(mv.getPath())); msg(settings.snap === 'osrm' ? 'Snapped with OSRM (OpenStreetMap)' : 'Snapped with Google Roads'); }
-      catch (err) { msg(String((err as Error).message)); }
-    });
-    $('#undo').addEventListener('click', () => { const p = mv.getPath(); p.pop(); mv.setPath(p); });
-    $('#clear').addEventListener('click', () => mv.setPath([]));
-    $('#km').addEventListener('click', () => {
-      try {
-        const p = mv.getPath();
-        if (p.length > 1) { const xs = p.map(c => c[0]), ys = p.map(c => c[1]); mv.map.fitBounds([[Math.min(...xs), Math.min(...ys)], [Math.max(...xs), Math.max(...ys)]], { padding: 60, duration: 0 }); }
-        let done = false;
-        const capture = () => {
-          if (done) return; done = true;
-          const src = mv.map.getCanvas();
-          const c = document.createElement('canvas'); const k = Math.min(1, 1400 / src.width);
-          c.width = src.width * k; c.height = src.height * k; c.getContext('2d')!.drawImage(src, 0, 0, c.width, c.height);
-          project.update(() => { seg.keymap = c.toDataURL('image/jpeg', 0.85); });
-          msg('Key map saved for the sheets.');
-        };
-        msg('Saving key map…');
-        mv.map.once('idle', capture);
-        setTimeout(capture, 2500); // tiles may already be idle, so do not wait on the event alone
-        mv.map.triggerRepaint();
-      } catch (err) { msg('Key map could not be saved: ' + (err as Error).message); }
-    });
-
-    $('#cap').addEventListener('click', async () => {
-      const p = mv.getPath();
-      const center = mv.map.getCenter();
-      const at: LngLat = p[0] ?? [center.lng, center.lat];
-      const heading = p[1] ? bearing(p[0], p[1]) : 0;
-      msg('Finding imagery…');
-      try {
-        const img = await streetImage(at, heading);
-        if (!img) { $('#svOut').innerHTML = ''; msg('No imagery found here from this source. Try another source.'); return; }
-        showStreet(img);
-        msg('');
-      } catch (err) { msg(String((err as Error).message)); }
-    });
-
-    function showStreet(img: StreetImage) {
-      $('#svOut').innerHTML = `<figure class="sv"><img src="${esc(img.src)}" alt="Street-level view from ${esc(img.source)}">
-        <figcaption>${esc(img.source)} · ${esc(img.credit)}${img.link ? ` · <a href="${esc(img.link)}" target="_blank" rel="noopener">open</a>` : ''}</figcaption></figure>
-        <button class="btn" id="useSv">Use for Visualize</button>`;
-      $('#useSv').addEventListener('click', () => {
-        project.update(() => { seg.perspective = { src: img.src, source: img.source, credit: img.credit, link: img.link, heading: img.heading }; });
-        location.hash = '#visualize';
-      });
-    }
-    if (seg.perspective && seg.perspective.source !== 'Upload') showStreet({ ...seg.perspective, at: [0, 0] } as StreetImage);
   }
 };

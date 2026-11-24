@@ -21,6 +21,8 @@ export class MapView {
   map: maplibregl.Map;
   private path: LngLat[] = [];
   onChange: (p: LngLat[]) => void = () => {};
+  // When set, map clicks go here instead of extending the path (Site snaps the clicks to the street).
+  onPick: ((at: LngLat) => void) | null = null;
 
   constructor(el: HTMLElement, center?: LngLat, path: LngLat[] = []) {
     this.path = path;
@@ -28,7 +30,7 @@ export class MapView {
     this.map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
     this.map.addControl(new maplibregl.ScaleControl({ unit: 'imperial' }), 'bottom-left');
     this.map.on('style.load', () => this.drawOverlay());
-    this.map.on('click', e => { this.path.push([e.lngLat.lng, e.lngLat.lat]); this.changed(); });
+    this.map.on('click', e => { const at: LngLat = [e.lngLat.lng, e.lngLat.lat]; if (this.onPick) this.onPick(at); else { this.path.push(at); this.changed(); } });
     this.setBasemap(settings.basemap);
   }
 
@@ -39,6 +41,9 @@ export class MapView {
   }
 
   setPath(p: LngLat[]) { this.path = p; this.changed(); }
+  // Draw the snapped line and the person's clicks as the markers.
+  private marks: LngLat[] = [];
+  setMarks(m: LngLat[]) { this.marks = m; this.drawOverlay(); }
   getPath() { return this.path; }
   flyTo(at: LngLat) { this.map.flyTo({ center: at, zoom: 18 }); }
 
@@ -48,7 +53,7 @@ export class MapView {
     const m = this.map;
     if (!m.isStyleLoaded()) { m.once('idle', () => this.drawOverlay()); return; }
     const line = { type: 'Feature' as const, properties: {}, geometry: { type: 'LineString' as const, coordinates: this.path } };
-    const pts = { type: 'FeatureCollection' as const, features: this.path.map((c, i) => ({ type: 'Feature' as const, properties: { i }, geometry: { type: 'Point' as const, coordinates: c } })) };
+    const pts = { type: 'FeatureCollection' as const, features: (this.marks.length ? this.marks : this.path).map((c, i) => ({ type: 'Feature' as const, properties: { i }, geometry: { type: 'Point' as const, coordinates: c } })) };
     const src = m.getSource(OVERLAY.line) as maplibregl.GeoJSONSource | undefined;
     if (src) { src.setData(line); (m.getSource(OVERLAY.pts) as maplibregl.GeoJSONSource).setData(pts); return; }
     m.addSource(OVERLAY.line, { type: 'geojson', data: line });
