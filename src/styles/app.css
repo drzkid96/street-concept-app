@@ -45,7 +45,7 @@ td input,td select{width:100%;padding:.3rem .4rem;border:1px solid var(--input-l
 td input[type=number]{text-align:right}
 
 .section-svg{display:block;width:100%;height:auto;max-height:100%;padding:1rem}
-.map{position:absolute;inset:0}
+.map,.map.maplibregl-map{position:absolute;inset:0}
 .badge{display:inline-block;font-size:.68rem;font-weight:700;padding:.05rem .45rem;border-radius:999px;background:var(--fp-pale-green);color:var(--fp-emerald)}
 .badge.warn{background:#FFE6DC;color:#B83D08}
 
