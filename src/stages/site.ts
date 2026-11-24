@@ -22,7 +22,7 @@ export const siteStage: Stage = {
       <p class="note">Click the map to place points along the corridor.</p>
       <div class="row">
         <select id="snapP" class="sel" style="flex:0 1 150px" aria-label="Snap provider">${opt('osrm', 'Snap: OSRM', settings.snap)}${opt('google', 'Snap: Google Roads', settings.snap)}</select>
-        <button class="btn ghost" id="snap">Snap to street</button><button class="btn ghost" id="undo">Undo</button><button class="btn ghost" id="clear">Clear</button>
+        <button class="btn ghost" id="snap">Snap to street</button><button class="btn ghost" id="km">Save key map</button><button class="btn ghost" id="undo">Undo</button><button class="btn ghost" id="clear">Clear</button>
       </div>
       <table><tbody>
         <tr><td>Length</td><td class="num" id="len">—</td></tr>
@@ -38,7 +38,9 @@ export const siteStage: Stage = {
       <p id="msg" class="note" role="status"></p>`;
 
     canvas.innerHTML = `<div class="map" id="map"></div>`;
+    let gradeTimer = 0;
     const path = (seg.path ?? []) as LngLat[];
+    siteStage.dispose = () => { clearTimeout(gradeTimer); mv.map.remove(); };
     const mv = new MapView(canvas.querySelector('#map') as HTMLElement, seg.location ? [seg.location.lng, seg.location.lat] : undefined, [...path]);
     const $ = <T extends HTMLElement>(s: string) => side.querySelector(s) as T;
     const msg = (t: string) => { $('#msg').textContent = t; };
@@ -53,7 +55,6 @@ export const siteStage: Stage = {
       $('#len').textContent = len ? `${len.toLocaleString()}'` : '—';
       $('#grade').textContent = seg.grade_pct != null && p.length > 1 ? `${seg.grade_pct.toFixed(1)}%` : '—';
     };
-    let gradeTimer = 0;
     mv.onChange = p => {
       refresh(p);
       clearTimeout(gradeTimer);
@@ -92,6 +93,20 @@ export const siteStage: Stage = {
     });
     $('#undo').addEventListener('click', () => { const p = mv.getPath(); p.pop(); mv.setPath(p); });
     $('#clear').addEventListener('click', () => mv.setPath([]));
+    $('#km').addEventListener('click', () => {
+      try {
+        const p = mv.getPath();
+        if (p.length > 1) { const xs = p.map(c => c[0]), ys = p.map(c => c[1]); mv.map.fitBounds([[Math.min(...xs), Math.min(...ys)], [Math.max(...xs), Math.max(...ys)]], { padding: 60, duration: 0 }); }
+        mv.map.once('idle', () => {
+          const src = mv.map.getCanvas();
+          const c = document.createElement('canvas'); const k = Math.min(1, 1400 / src.width);
+          c.width = src.width * k; c.height = src.height * k; c.getContext('2d')!.drawImage(src, 0, 0, c.width, c.height);
+          project.update(() => { seg.keymap = c.toDataURL('image/jpeg', 0.85); });
+          msg('Key map saved for the sheets.');
+        });
+        mv.map.triggerRepaint();
+      } catch (err) { msg('Key map could not be saved: ' + (err as Error).message); }
+    });
 
     $('#cap').addEventListener('click', async () => {
       const p = mv.getPath();

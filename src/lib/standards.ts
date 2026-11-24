@@ -58,3 +58,13 @@ export function check(type: ElementType, width: number) {
     return [];
   });
 }
+
+// Options per element type; first is the default. Drives cost mapping and drawing.
+export const MATERIALS: Partial<Record<ElementType, [string, string][]>> = {
+  bike_lane: [['green', 'Green paint'], ['unpainted', 'Unpainted']],
+  separated_bikeway: [['posts', 'Flexible posts'], ['curb', 'Concrete curb'], ['raised', 'Raised (sidewalk level)']],
+  bike_buffer: [['paint', 'Painted'], ['posts', 'With posts']],
+  median: [['landscaped', 'Landscaped'], ['concrete', 'Concrete']],
+  bus_lane: [['red', 'Red surfacing'], ['unpainted', 'Unpainted']]
+};
+export const materialOf = (t: ElementType, m?: string) => m ?? MATERIALS[t]?.[0][0];

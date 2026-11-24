@@ -24,7 +24,7 @@ export class MapView {
 
   constructor(el: HTMLElement, center?: LngLat, path: LngLat[] = []) {
     this.path = path;
-    this.map = new maplibregl.Map({ container: el, style: BASEMAPS[0].url!, center: center ?? LA, zoom: center ? 17 : 11, attributionControl: { compact: true } });
+    this.map = new maplibregl.Map({ container: el, style: BASEMAPS[0].url!, center: center ?? LA, zoom: center ? 17 : 11, attributionControl: { compact: true }, canvasContextAttributes: { preserveDrawingBuffer: true } });
     this.map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
     this.map.addControl(new maplibregl.ScaleControl({ unit: 'imperial' }), 'bottom-left');
     this.map.on('style.load', () => this.drawOverlay());

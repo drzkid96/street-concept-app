@@ -1,5 +1,5 @@
 import type { Section, ElementType, Direction } from '../lib/types';
-import { ELEMENTS, check, topicLink } from '../lib/standards';
+import { ELEMENTS, MATERIALS, materialOf, check, topicLink } from '../lib/standards';
 
 const TYPES = Object.keys(ELEMENTS) as ElementType[];
 const DIRS: Direction[] = ['none', 'inbound', 'outbound', 'both'];
@@ -16,6 +16,7 @@ export function sectionEditor(host: HTMLElement, sec: Section, onChange: () => v
           const issues = check(e.type, e.width_ft);
           return `<tr data-i="${i}">
             <td><select data-k="type">${TYPES.map(t => `<option value="${t}"${t === e.type ? ' selected' : ''}>${ELEMENTS[t].label}</option>`).join('')}</select>
+              ${MATERIALS[e.type] ? `<select data-k="material" aria-label="Option" style="margin-top:.25rem">${MATERIALS[e.type]!.map(([v, l]) => `<option value="${v}"${v === materialOf(e.type, e.material) ? ' selected' : ''}>${l}</option>`).join('')}</select>` : ''}
               ${issues.map(x => `<a class="badge warn" href="${topicLink(e.type)}" target="_blank" rel="noopener" title="Placeholder rule, verify">${x.msg}</a>`).join(' ')}</td>
             <td class="num"><input data-k="width_ft" type="number" min="0" step="0.5" value="${e.width_ft}"></td>
             <td><select data-k="direction">${DIRS.map(d => `<option value="${d}"${d === e.direction ? ' selected' : ''}>${DIR_LABEL[d]}</option>`).join('')}</select></td>
@@ -31,9 +32,10 @@ export function sectionEditor(host: HTMLElement, sec: Section, onChange: () => v
     const tr = t.closest('tr[data-i]') as HTMLElement | null;
     if (!tr) return;
     const el = sec.elements[+tr.dataset.i!];
-    const k = t.dataset.k as 'type' | 'width_ft' | 'direction';
+    const k = t.dataset.k as 'type' | 'width_ft' | 'direction' | 'material';
     if (k === 'width_ft') el.width_ft = Math.max(0, parseFloat(t.value) || 0);
-    else if (k === 'type') el.type = t.value as ElementType;
+    else if (k === 'type') { el.type = t.value as ElementType; el.material = materialOf(el.type); }
+    else if (k === 'material') el.material = t.value;
     else if (k === 'direction') el.direction = t.value as Direction;
     render(); onChange();
   });

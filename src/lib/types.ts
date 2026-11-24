@@ -19,6 +19,7 @@ export interface Alternative {
   name: string;
   tier: 'quick-build' | 'interim' | 'capital';
   section: Section;
+  render?: string; // data URL of the concept rendering from Visualize
 }
 
 export interface Segment {
@@ -29,15 +30,20 @@ export interface Segment {
   path?: [number, number][];
   grade_pct?: number;
   perspective?: Perspective;
+  keymap?: string; // data URL snapshot from Site
+  curbPts?: [number, number][]; // left/right curb at image bottom, fractions
   curbs: unknown[];
   existing: Section;
   alternatives: Alternative[];
 }
 
+export interface ReviewRecord { at: string; kind: 'send' | 'approved'; sheets: number; markups: Markup[]; note?: string }
+export interface Markup { page: number; tool: 'callout' | 'cloud' | 'box' | 'line' | 'pen'; pts: [number, number][]; text?: string }
+
 export interface ProjectFile {
   project: { id: string; name: string; agency: string; brand: 'fp' | 'personal' };
   segments: Segment[];
-  review: unknown[];
+  review: ReviewRecord[];
   standards_version: string;
 }
 
@@ -48,4 +54,5 @@ export interface Perspective {
   link?: string;
   heading?: number;
   vp?: [number, number];  // vanishing point, fraction of image width/height
+  cam?: { fov: number; h: number; xcam: number; horizon: number; cx: number }; // auto-scale camera
 }
