@@ -1,7 +1,7 @@
 import { live, repaintNav, type Stage } from './index';
 import { project } from '../lib/project';
 import { MapView } from '../lib/mapView';
-import { BASEMAPS, settings, saveSettings, geocode, snap, elevationFt, lengthFt, bearing, type LngLat } from '../lib/providers';
+import { BASEMAPS, settings, saveSettings, geocode, snap, elevationFt, lengthFt, bearing, reverseAddress, type LngLat } from '../lib/providers';
 import { head, task, more, esc } from './ui';
 import { SCENES } from '../lib/scenes';
 
@@ -18,14 +18,14 @@ export const siteStage: Stage = {
     const has = path.length > 1;
     side.innerHTML = `${head(1, 'Site', 'Find the street and mark the stretch you are studying.')}
       ${task(1, 'Find the street', has ? 'done' : 'now', `
-        <form id="sf" class="row"><input id="q" class="sel" placeholder="Address, street or intersection" aria-label="Search"><button class="btn">Search</button></form>
+        <form id="sf" class="row"><input id="q" class="sel" placeholder="Address, intersection or place, any format" aria-label="Search"><button class="btn">Search</button></form>
         <ul id="res" class="results"></ul>`)}
       ${task(2, 'Mark the segment', has ? 'done' : 'now', `
         <p class="note">Click on the map where the segment <b>starts</b>, then where it <b>ends</b>. The line follows the street. Click again to extend it.</p>
         <div class="row"><button class="btn ghost" id="undo">Undo last click</button><button class="btn ghost" id="clear">Start over</button></div>
         <dl class="facts"><div><dt>Length</dt><dd id="len">—</dd></div><div><dt>Grade</dt><dd id="grade">—</dd></div></dl>`)}
       ${task(3, 'Describe the setting', has ? 'now' : 'later', `
-        <div class="field"><label for="city">City (sets the regional prices)</label><input id="city" value="${esc(seg.city ?? 'Los Angeles')}"></div>
+        <div class="field"><label for="city">City (from the address; sets the regional prices)</label><input id="city" value="${esc(seg.city ?? 'Los Angeles')}"></div>
         <div class="field"><label for="scene">Frontage (what lines the street)</label><select id="scene">
           <option value=""${seg.settingPinned ? '' : ' selected'}>Automatic: read OpenStreetMap land use nearby</option>
           ${SCENES.map(([v, l]) => `<option value="${v}"${seg.settingPinned && v === seg.setting ? ' selected' : ''}>${l}</option>`).join('')}</select>
@@ -34,7 +34,7 @@ export const siteStage: Stage = {
         <div class="field"><label for="from">Street name (for sheet titles)</label><input id="from" value="${esc(seg.limits.from)}"></div>
         <div class="field"><label for="to">Limits (for example "Los Feliz Blvd to Riverside Dr")</label><input id="to" value="${esc(seg.limits.to)}"></div>
         <div class="field"><label for="bm">Map style</label><select id="bm">${BASEMAPS.map(b => opt(b.id, b.label, settings.basemap)).join('')}</select></div>
-        <div class="field"><label for="geo">Search with</label><select id="geo">${opt('auto', 'OpenStreetMap, then Google', settings.geocoder)}${opt('nominatim', 'OpenStreetMap only', settings.geocoder)}${opt('google', 'Google only', settings.geocoder)}</select></div>
+        <div class="field"><label for="geo">Search with</label><select id="geo">${opt('auto', 'Google, then OpenStreetMap', settings.geocoder)}${opt('google', 'Google only', settings.geocoder)}${opt('nominatim', 'OpenStreetMap only', settings.geocoder)}</select></div>
         <div class="field"><label for="snapP">Follow streets with</label><select id="snapP">${opt('osrm', 'OpenStreetMap routing', settings.snap)}${opt('google', 'Google Roads', settings.snap)}</select></div>`)}
       <p id="msg" class="note" role="status"></p>`;
 
@@ -83,8 +83,15 @@ export const siteStage: Stage = {
       mv.setMarks(clicks);
       if (clicks.length < 2) { mv.setPath([...clicks]); hint(clicks.length ? 'Now click the end of the segment' : 'Click the start of the segment'); return; }
       hint(''); msg('Following the street…');
-      try { const p = await snap(clicks); if (mine === busy && gen === live.gen) { mv.setPath(p); msg(''); keymap(); } }
+      try { const p = await snap(clicks); if (mine === busy && gen === live.gen) { mv.setPath(p); msg(''); keymap(); locate(p); } }
       catch (err) { if (mine === busy) { mv.setPath([...clicks]); msg('Could not follow the street, so the line is straight: ' + (err as Error).message); } }
+    };
+    const locate = async (p: LngLat[]) => {
+      const a = await reverseAddress(p[Math.floor(p.length / 2)]);
+      if (!a || gen !== live.gen) return;
+      project.update(() => { seg.address = a.address; if (a.city && (!seg.city || seg.cityAuto)) { seg.city = a.city; seg.cityAuto = true; } });
+      const c = side.querySelector('#city') as HTMLInputElement | null; if (c && seg.cityAuto) c.value = seg.city ?? '';
+      (window as any).__paintAddr?.();
     };
     mv.onPick = at => { clicks.push(at); resnap(); };
     mv.setMarks(clicks);
@@ -95,7 +102,7 @@ export const siteStage: Stage = {
     $('#bm').addEventListener('change', e => mv.setBasemap((e.target as HTMLSelectElement).value));
     $('#geo').addEventListener('change', e => { settings.geocoder = (e.target as HTMLSelectElement).value as typeof settings.geocoder; saveSettings(); });
     $('#snapP').addEventListener('change', e => { settings.snap = (e.target as HTMLSelectElement).value as typeof settings.snap; saveSettings(); if (clicks.length > 1) resnap(); });
-    $('#city').addEventListener('change', e => project.update(() => { seg.city = (e.target as HTMLInputElement).value.trim() || 'Los Angeles'; }));
+    $('#city').addEventListener('change', e => project.update(() => { seg.city = (e.target as HTMLInputElement).value.trim() || 'Los Angeles'; seg.cityAuto = false; }));
     $('#scene').addEventListener('change', e => project.update(() => {
       const v = (e.target as HTMLSelectElement).value;
       seg.settingPinned = !!v;

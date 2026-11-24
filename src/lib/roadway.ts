@@ -134,3 +134,11 @@ export function conformTo(alt: Section, existing: Section) {
     settle(split(alt).road, target);
   }
 }
+
+// Fit a built roadway to the curb-to-curb width with the same priority rules (extra to bikeways, buffers,
+// parking up to their maximum, then shoulders; shortfall from shoulders, buffers and lanes above 10 ft).
+export function fitRoad(sec: Section, target: number) {
+  const r = split(sec).road, cur = r.reduce((a, e) => a + e.width_ft, 0);
+  if (Math.abs(target - cur) > 0.01) absorb(r, target - cur, null);
+  settle(split(sec).road, target, sec);
+}

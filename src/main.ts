@@ -47,6 +47,10 @@ window.addEventListener('hashchange', () => go(location.hash.slice(1)));
 name.value = project.get().project.name;
 name.addEventListener('change', () => project.update(p => { p.project.name = name.value; }));
 
+// Full address of the segment, top right
+const addr = document.getElementById('addr')!;
+const paintAddr = () => { const g = project.seg(); addr.innerHTML = g.address ? `<b>${g.limits.from || g.address.split(',')[0]}</b><span>${g.address}</span>` : ''; };
+(window as any).__paintAddr = paintAddr; paintAddr();
 const pill = document.getElementById('eng')!;
 const paint = () => {
   pill.className = 'pill ' + (engine.on ? 'on' : 'off');

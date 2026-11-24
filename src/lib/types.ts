@@ -20,6 +20,7 @@ export interface Alternative {
   tier: 'quick-build' | 'interim' | 'capital';
   section: Section;
   render?: string; // data URL of the concept rendering from Visualize
+  enabled?: boolean; // included in the outputs (default on)
 }
 
 export interface Segment {
@@ -37,6 +38,8 @@ export interface Segment {
   existing: Section;
   existingChecked?: boolean;
   city?: string; // sets the regional prices
+  cityAuto?: boolean; // city filled from the address, not typed
+  address?: string; // full address of the segment midpoint (Google)
   settingPinned?: boolean; // frontage chosen by the person; otherwise read from OSM land use
   setting?: string; // drawing surroundings and cost setting (fp-section-builder scene, or 'park')
   existingAuto?: import('./existingAuto').AutoResult; // how the existing section was filled (OSM + photo check)

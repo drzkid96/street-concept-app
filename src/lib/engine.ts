@@ -41,5 +41,6 @@ export const outputsStore: {
   streetview?: { job: string; pdfs: EngineFile[]; renders: EngineFile[] };
   look?: string;
   handoff?: { zip: string; name: string; bytes: number };
+  cover?: { job: string; pdf: string; png: string };
   curbs?: { job: string; mode: 'manual' | 'ai'; guide: string; approved: boolean; status?: CurbStatus; photo: string };
 } = {};

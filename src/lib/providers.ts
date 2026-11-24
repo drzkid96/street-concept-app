@@ -8,8 +8,8 @@ export interface Settings {
   basemap: string; geocoder: 'auto' | 'nominatim' | 'google'; snap: 'osrm' | 'google';
   street: 'google' | 'panoramax' | 'mapillary'; mapillaryToken: string;
 }
-const SKEY = 'sca-settings-v1';
-const DEFAULTS: Settings = { basemap: 'osm-liberty', geocoder: 'auto', snap: 'osrm', street: 'google', mapillaryToken: '' };
+const SKEY = 'sca-settings-v2';
+const DEFAULTS: Settings = { basemap: 'google-satellite', geocoder: 'auto', snap: 'osrm', street: 'google', mapillaryToken: '' };
 export const settings: Settings = (() => {
   try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(SKEY) || '{}') }; } catch { return { ...DEFAULTS }; }
 })();
@@ -40,13 +40,33 @@ export async function googleTileUrl(): Promise<string> {
 
 // ---------- geocoding ----------
 export interface Place { label: string; at: LngLat; by: string }
-export async function geocode(q: string): Promise<Place[]> {
-  if (settings.geocoder === 'auto') {
-    // Open first; Google only when OpenStreetMap finds nothing (e.g. intersections).
-    const open = await nominatim(q).catch(() => [] as Place[]);
-    return open.length ? open : google(q);
-  }
-  return settings.geocoder === 'google' ? google(q) : nominatim(q);
+// Search: Google first (Places text search reads messy input; Geocoding handles intersections), then OpenStreetMap.
+export function tidyQuery(q: string) {
+  return q.replace(/\s+/g, ' ').replace(/\s*(&|@|\/|\+| x | at )\s*/gi, ' and ').replace(/\b(st|ave|blvd|dr|rd)\./gi, '$1').trim();
+}
+async function googleGeocode(q: string): Promise<Place[]> {
+  const u = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(q)}&bounds=32.5,-120.7|35.8,-114.1&region=us&key=${GOOGLE_KEY}`;
+  const j = await fetch(u).then(r => r.json());
+  return (j.results || []).map((p: any) => ({ label: p.formatted_address, at: [p.geometry.location.lng, p.geometry.location.lat] as LngLat, by: 'Google' }));
+}
+export async function geocode(raw: string): Promise<Place[]> {
+  const q = tidyQuery(raw);
+  if (settings.geocoder === 'nominatim') return nominatim(q);
+  const [a, b] = await Promise.allSettled([google(q), googleGeocode(q)]);
+  const out: Place[] = [];
+  for (const r of [a, b]) if (r.status === 'fulfilled') for (const p of r.value)
+    if (!out.some(o => Math.abs(o.at[0] - p.at[0]) < 2e-4 && Math.abs(o.at[1] - p.at[1]) < 2e-4)) out.push(p);
+  if (out.length || settings.geocoder === 'google') return out;
+  return nominatim(q).catch(() => [] as Place[]);
+}
+// Full address of a point (Google reverse geocoding): street address, city, county.
+export async function reverseAddress([x, y]: LngLat): Promise<{ address: string; city: string } | null> {
+  try {
+    const j = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${y},${x}&key=${GOOGLE_KEY}`).then(r => r.json());
+    const r0 = j.results?.[0]; if (!r0) return null;
+    const comp = (t: string) => j.results.flatMap((r: any) => r.address_components).find((c: any) => c.types.includes(t))?.long_name;
+    return { address: r0.formatted_address, city: comp('locality') || comp('administrative_area_level_3') || comp('administrative_area_level_2') || '' };
+  } catch { return null; }
 }
 async function google(q: string): Promise<Place[]> {
   {
@@ -160,4 +180,18 @@ function nearest<T>(items: T[], at: LngLat, get: (t: T) => LngLat): T | null {
   let best: T | null = null, bd = Infinity;
   for (const it of items) { const d = lengthFt([at, get(it)]); if (d < bd) { bd = d; best = it; } }
   return best;
+}
+
+// Google satellite aerial of a path, for the cover sheet: centre and zoom chosen to fit, returned as a data URL.
+export async function aerialOf(path: LngLat[]): Promise<{ dataUrl: string; center: LngLat; zoom: number; scale: number }> {
+  const merc = ([lon, lat]: LngLat) => { const s = Math.sin(lat * Math.PI / 180); return [(lon + 180) / 360 * 256, (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * 256]; };
+  const xs = path.map(p => merc(p)[0]), ys = path.map(p => merc(p)[1]);
+  const span = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys), 1e-6);
+  const zoom = Math.max(13, Math.min(20, Math.floor(Math.log2(440 / span))));
+  const lons = path.map(p => p[0]), lats = path.map(p => p[1]);
+  const center: LngLat = [(Math.min(...lons) + Math.max(...lons)) / 2, (Math.min(...lats) + Math.max(...lats)) / 2];
+  const u = `https://maps.googleapis.com/maps/api/staticmap?center=${center[1]},${center[0]}&zoom=${zoom}&size=640x640&scale=2&maptype=satellite&key=${GOOGLE_KEY}`;
+  const blob = await fetch(u).then(r => { if (!r.ok) throw new Error(`Google aerial ${r.status}`); return r.blob(); });
+  const dataUrl = await new Promise<string>(res => { const fr = new FileReader(); fr.onload = () => res(fr.result as string); fr.readAsDataURL(blob); });
+  return { dataUrl, center, zoom, scale: 2 };
 }

@@ -8,6 +8,8 @@ import type { LngLat } from '../lib/providers';
 import { visualizeStage } from './visualize';
 import { head, task, esc } from './ui';
 import { showSections } from '../lib/sectionView';
+import { aerialMini } from '../lib/aerialMini';
+import { defaultAlternatives } from '../lib/concepts';
 import { conformTo } from '../lib/roadway';
 import { SCENES, DEFAULT_SCENE, applyFrontage } from '../lib/scenes';
 import type { Alternative } from '../lib/types';
@@ -24,6 +26,7 @@ const existing: Stage = {
   id: 'existing', name: 'Existing',
   done: () => !!project.seg().existingChecked,
   render(side, canvas) {
+    existing.dispose?.();
     const seg = project.seg();
     const gen = live.gen;
     const path = (seg.path ?? []) as LngLat[];
@@ -50,7 +53,10 @@ const existing: Stage = {
         <div id="ed"></div>
         <label class="check-row"><input type="checkbox" id="ok"${seg.existingChecked ? ' checked' : ''}${stale ? ' disabled' : ''}> This matches the street today</label>`)}`;
     if (!stale && seg.settingPinned && a && a.scene !== seg.setting) project.update(() => { applyFrontage(seg.existing, seg.setting, a.sidewalks); a.scene = seg.setting!; a.sceneWhy = 'your choice in Site'; seg.alternatives.forEach(x => conformTo(x.section, seg.existing)); });
-    const draw = () => showSections(canvas, [{ id: 'ex', title: `${seg.limits.from || 'Segment'}: existing`, section: seg.existing, existing: true }], seg.setting);
+    canvas.innerHTML = '<div class="ex-split"><div id="aer"></div><div id="secHost"></div></div>';
+    const stopMap = has ? aerialMini(canvas.querySelector('#aer') as HTMLElement, path) : null;
+    existing.dispose = () => stopMap?.();
+    const draw = () => showSections(canvas.querySelector('#secHost') as HTMLElement, [{ id: 'ex', title: `${seg.limits.from || 'Segment'}: existing`, section: seg.existing, existing: true }], seg.setting);
     sectionEditor(side.querySelector('#ed') as HTMLElement, seg.existing, () => { project.update(() => { seg.alternatives.forEach(x => conformTo(x.section, seg.existing)); }); draw(); }, { existing: true });
     side.querySelector('#ok')!.addEventListener('change', e => { project.update(() => { seg.existingChecked = (e.target as HTMLInputElement).checked; }); repaintNav(); existing.render(side, canvas); });
     side.querySelector('#again')?.addEventListener('click', () => { project.update(() => { delete seg.existingAuto; seg.existingChecked = false; }); existing.render(side, canvas); });
@@ -77,14 +83,17 @@ const existing: Stage = {
 let altIdx = 0;
 const alts: Stage = {
   id: 'alts', name: 'Alternatives',
-  done: () => project.seg().alternatives.length > 0,
+  done: () => project.seg().alternatives.some(a => a.enabled !== false),
   render(side, canvas) {
     const seg = project.seg();
+    // Three concepts by default (bikeway tiers), each fitted inside the existing curbs. Each can be switched off.
+    if (!seg.alternatives.length && seg.existing.elements.length) project.update(() => { seg.alternatives = defaultAlternatives(seg.existing); });
     if (altIdx >= seg.alternatives.length) altIdx = Math.max(0, seg.alternatives.length - 1);
     const a = seg.alternatives[altIdx];
-    side.innerHTML = `${head(3, 'Alternatives', 'Design one or more concepts. Each new one starts as a copy of the existing street.')}
-      <div class="chips" role="tablist">${seg.alternatives.map((x, i) => `<button class="chip" role="tab" aria-selected="${i === altIdx}" data-i="${i}">${esc(x.name)}</button>`).join('')}
-        <button class="chip add" id="dup">+ New alternative</button></div>
+    side.innerHTML = `${head(3, 'Alternatives', 'Three bikeway concepts are ready by default, each fitted inside the existing curbs. Edit them, switch any off, or add your own.')}
+      <ul class="altlist">${seg.alternatives.map((x, i) => `<li class="${i === altIdx ? 'cur' : ''}${x.enabled === false ? ' off' : ''}"><input type="checkbox" data-on="${i}" aria-label="Include ${esc(x.name)} in the outputs"${x.enabled === false ? '' : ' checked'}><button class="linkbtn" data-i="${i}">${String.fromCharCode(65 + i)}. ${esc(x.name)}</button></li>`).join('')}</ul>
+      <div class="row"><button class="chip add" id="dup">+ New from existing</button><button class="chip add" id="defaults">Reset to the three default concepts</button></div>
+      <p class="note">Ticked concepts go into the outputs.</p>
       ${a ? `<div class="field"><label for="nm">Name</label><input id="nm" value="${esc(a.name)}"></div>
       <div class="field"><label for="tier">Delivery</label><select id="tier"><option value="quick-build">Quick-build (paint and posts)</option><option value="interim">Interim</option><option value="capital">Capital (concrete)</option></select></div>
       <p class="note">Change the roadway between the curbs. The curbs and everything outside them stay as they are today.</p>
@@ -95,7 +104,9 @@ const alts: Stage = {
       project.update(() => { seg.alternatives.push(n); });
       altIdx = seg.alternatives.length - 1; repaintNav(); alts.render(side, canvas);
     });
-    side.querySelectorAll<HTMLElement>('.chip[data-i]').forEach(b => b.addEventListener('click', () => { altIdx = +b.dataset.i!; alts.render(side, canvas); }));
+    side.querySelectorAll<HTMLElement>('.altlist [data-i]').forEach(b => b.addEventListener('click', () => { altIdx = +b.dataset.i!; alts.render(side, canvas); }));
+    side.querySelectorAll<HTMLInputElement>('[data-on]').forEach(c => c.addEventListener('change', () => { project.update(() => { seg.alternatives[+c.dataset.on!].enabled = c.checked; }); alts.render(side, canvas); }));
+    side.querySelector('#defaults')!.addEventListener('click', e => { const b = e.currentTarget as HTMLButtonElement; if (!b.dataset.arm) { b.dataset.arm = '1'; b.textContent = 'Click again: replaces all alternatives'; return; } project.update(() => { seg.alternatives = defaultAlternatives(seg.existing); }); altIdx = 0; repaintNav(); alts.render(side, canvas); });
     if (!a) { showSections(canvas, [{ id: 'ex', title: 'Existing', section: seg.existing, existing: true }], seg.setting); return; }
     conformTo(a.section, seg.existing);
     (side.querySelector('#tier') as HTMLSelectElement).value = a.tier;

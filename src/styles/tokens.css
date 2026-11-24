@@ -32,13 +32,5 @@
   --line: var(--fp-grid);
   --muted: #5b6b70;
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    --bg: var(--fp-slate); --ink: #FFFFFF; --accent: var(--fp-light-green); --accent-2: var(--fp-light-green);
-    --panel: #001E26; --band: #002F3B; --line: #0d3d48; --muted: #a9bcc0;
-  }
-}
-:root[data-theme='dark'] {
-  --bg: var(--fp-slate); --ink: #FFFFFF; --accent: var(--fp-light-green); --accent-2: var(--fp-light-green);
-  --panel: #001E26; --band: #002F3B; --line: #0d3d48; --muted: #a9bcc0;
-}
+/* Light only: SoCal Super Standards styling. */
+:root{color-scheme:light}
