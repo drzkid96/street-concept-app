@@ -53,7 +53,7 @@ name.addEventListener('change', () => project.update(p => { p.project.name = nam
 
 // Full address of the segment, top right
 const addr = document.getElementById('addr')!;
-const paintAddr = () => { const g = project.seg(); addr.hidden = !g.address; addr.innerHTML = g.address ? `<span class="lbl">LOCATION</span><b>${g.address}</b>` : ''; };
+const paintAddr = () => { const g = project.seg(); const where = [g.limits.from, g.city].filter(Boolean).join(', '); addr.hidden = !where; addr.innerHTML = where ? `${g.keymap ? `<img src="${g.keymap}" alt="Key map">` : ''}<div><span class="lbl">LOCATION</span><b>${where}</b>${g.address ? `<span>${g.address}</span>` : ''}</div>` : ''; };
 (window as any).__paintAddr = paintAddr; paintAddr();
 const pill = document.getElementById('eng')!;
 const paint = () => {

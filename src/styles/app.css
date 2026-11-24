@@ -189,3 +189,4 @@ input[type=range]{width:100%;accent-color:var(--fp-emerald)}
 .stages button:disabled{opacity:.45;cursor:not-allowed}
 .pano{position:absolute;inset:0}
 .linerow td{padding:.1rem .3rem!important;background:transparent!important;border-bottom:0}.linerow td{display:flex;gap:.5rem;align-items:center;justify-content:flex-end}.linerow span{font-size:.72rem;color:var(--muted)}.linerow select{width:auto!important;font-size:.78rem;padding:.1rem .3rem!important}
+.addr{display:flex!important;gap:.6rem;align-items:center;text-align:left}.addr img{height:46px;width:74px;object-fit:cover;border-radius:5px;border:1px solid var(--line)}.addr div{display:grid;line-height:1.2}

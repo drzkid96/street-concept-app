@@ -35,6 +35,7 @@ export interface Segment {
   grade_pct?: number;
   perspective?: Perspective;
   keymap?: string; // data URL snapshot from Site
+  keymapCut?: [number, number][]; // section cut line on the key map, pixels
   curbPts?: [number, number][]; // left/right curb at image bottom, fractions
   curbs: unknown[];
   existing: Section;

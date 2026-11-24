@@ -54,10 +54,16 @@ export const siteStage: Stage = {
         try {
           const src = mv.map.getCanvas(), c = document.createElement('canvas'), k = Math.min(1, 1400 / src.width);
           c.width = src.width * k; c.height = src.height * k; c.getContext('2d')!.drawImage(src, 0, 0, c.width, c.height);
-          project.update(() => { seg.keymap = c.toDataURL('image/jpeg', 0.85); });
+          // section cut across the street at the segment midpoint, in key map pixels
+          const pp = mv.getPath(), mid = pp[Math.floor(pp.length / 2)], nxt = pp[Math.min(pp.length - 1, Math.floor(pp.length / 2) + 1)] ?? mid;
+          const r = src.width / src.clientWidth * k, a = mv.map.project(mid as [number, number]), b2 = mv.map.project(nxt as [number, number]);
+          const L = Math.hypot(b2.x - a.x, b2.y - a.y) || 1, nx = -(b2.y - a.y) / L, ny = (b2.x - a.x) / L, h = 26;
+          project.update(() => { seg.keymap = c.toDataURL('image/jpeg', 0.85); seg.keymapCut = [[(a.x - nx * h) * r, (a.y - ny * h) * r], [(a.x + nx * h) * r, (a.y + ny * h) * r]]; });
+          (window as any).__paintAddr?.();
         } catch { /* keymap is optional */ }
       };
-      mv.map.once('idle', grab); setTimeout(grab, 3000);
+      const pp = mv.getPath(); if (pp.length > 1) { const xs = pp.map(q => q[0]), ys = pp.map(q => q[1]); mv.map.fitBounds([[Math.min(...xs), Math.min(...ys)], [Math.max(...xs), Math.max(...ys)]], { padding: 90, maxZoom: 18.5, duration: 0 }); }
+      mv.map.once('idle', grab); setTimeout(grab, 3500);
     };
     const show = (p: LngLat[]) => {
       const len = Math.round(lengthFt(p));

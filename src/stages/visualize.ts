@@ -91,6 +91,7 @@ export const visualizeStage: Stage = {
           ${item(s.R >= 2, s.Rai > 0 && s.Rai === s.R, 'Right curb', s.R ? 'Click 1 more point along the right curb.' : 'Click 2 or more points along the right curb face, far to near.', 'Marked')}
         </ul>
         <p class="note">Drag any point to move it. <button class="linkbtn" id="undo">Undo</button> (or Z) takes back the last change.</p>
+        <div class="row"><span class="note">Zoom (or scroll on the photo):</span><button class="btn ghost sm" data-z="zoom-in">+</button><button class="btn ghost sm" data-z="zoom-out">−</button><button class="btn ghost sm" data-z="zoom-fit">Whole photo</button></div>
         <div class="row"><button class="btn" id="approve"${s.done ? '' : ' disabled'}>${allAi ? 'Accept AI curbs' : 'Approve curbs'}</button>
           ${c.mode === 'ai' && s.Lai + s.Rai > 0 ? '<button class="btn ghost" id="clearai">Remove AI suggestions</button>' : ''}</div>
         ${s.done ? '' : `<p class="note">To approve, finish ${missing.join(', ')}.</p>`}
@@ -150,6 +151,7 @@ export const visualizeStage: Stage = {
           msgText = ''; paint(); showCanvas(); repaintNav();
         } catch (err) { say((err as Error).message); b.disabled = false; }
       });
+      side.querySelectorAll<HTMLElement>('[data-z]').forEach(b => b.addEventListener('click', () => send({ cmd: b.dataset.z })));
       side.querySelectorAll<HTMLElement>('[data-tool]').forEach(b => b.addEventListener('click', () => send({ cmd: 'tool', tool: b.dataset.tool })));
       $('#undo')?.addEventListener('click', () => send({ cmd: 'undo' }));
       $('#clearai')?.addEventListener('click', () => send({ cmd: 'clear-ai' }));
