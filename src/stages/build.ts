@@ -72,7 +72,7 @@ export const buildStage: Stage = {
           const path = (seg.path ?? []) as LngLat[];
           const aerial = await aerialOf(path).then(a => ({ ...a, source: 'Google' })).catch(() => undefined);   // without it the engine uses USGS imagery
           let photo: string | undefined;
-          if (seg.perspective) photo = await fetch(seg.perspective.src).then(x => x.blob()).then(b => new Promise<string>(res => { const fr = new FileReader(); fr.onload = () => res(fr.result as string); fr.readAsDataURL(b); })).catch(() => undefined);
+          if (seg.perspective) photo = await fetch(seg.perspective.original ?? seg.perspective.src).then(x => x.blob()).then(b => new Promise<string>(res => { const fr = new FileReader(); fr.onload = () => res(fr.result as string); fr.readAsDataURL(b); })).catch(() => undefined);
           const r = await engine.json('/api/existing-report', { project: pf, aerial, photo, photo_credit: seg.perspective ? `${seg.perspective.source}${seg.perspective.credit ? ', ' + seg.perspective.credit : ''}. Looking along the segment.` : undefined });
           outputsStore.existingReport = { job: r.job, pdf: r.pdf };
           log[log.length - 1] = 'Existing conditions report: done.';

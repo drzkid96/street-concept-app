@@ -2,7 +2,7 @@
 // person presses "Use this view".
 import { live, repaintNav, goTo, type Stage } from './index';
 import { project } from '../lib/project';
-import { outputsStore } from '../lib/engine';
+import { outputsStore, engine } from '../lib/engine';
 import { bearing, type LngLat } from '../lib/providers';
 import { GOOGLE_KEY } from '../lib/config';
 import { head, task, esc } from './ui';
@@ -56,6 +56,19 @@ export async function verifyPhoto(): Promise<boolean> {
 }
 
 let mode: 'idle' | 'sv' = 'idle';
+const CLEAR_KEY = 'sca-clear-cars';
+let clearCars = (() => { try { return localStorage.getItem(CLEAR_KEY) === '1'; } catch { return false; } })();
+let working = false;
+const toDataUrl = (b: Blob) => new Promise<string>((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result as string); fr.onerror = () => rej(new Error('The photo could not be read.')); fr.readAsDataURL(b); });
+/** The same photo with the vehicles removed, by the engine (the rendering skill's own detector and fill). */
+async function withoutCars<T extends { src: string; original?: string }>(ph: T): Promise<T & { original: string; cleared: number }> {
+  const from = ph.original ?? ph.src;
+  const blob = await fetch(from).then(x => { if (!x.ok) throw new Error('the photo could not be loaded'); return x.blob(); });
+  const fd = new FormData(); fd.append('photo', blob, 'photo.jpg');
+  const r = await engine.form('/api/photo/clear', fd) as { photo: string; removed?: number };
+  const out = await fetch(engine.abs(r.photo)).then(x => x.blob()).then(toDataUrl);
+  return { ...ph, src: out, original: from, cleared: r.removed ?? 0 };
+}
 let dropped = false;
 export const photoStage: Stage = {
   id: 'photo', name: 'Photo',
@@ -71,31 +84,55 @@ export const photoStage: Stage = {
       outputsStore.curbs = undefined; outputsStore.streetview = undefined;   // new photo: curbs start over
       mode = 'idle'; repaintNav(); goTo('visualize');   // approved: straight on to the curbs
     };
+    const approve = async (ph: NonNullable<typeof p>, clean = clearCars) => {
+      if (!clean) { setPhoto(ph); return; }
+      if (working) return;
+      working = true; say('Removing the cars from the photo… about half a minute.');
+      side.querySelectorAll('button').forEach(x => ((x as HTMLButtonElement).disabled = true));
+      try {
+        const c = await withoutCars(ph);
+        working = false;
+        if (gen !== live.gen) { project.update(() => { seg.perspective = c; delete seg.curbMarks; }); return; }
+        setPhoto(c);
+      } catch (err) {
+        working = false;
+        if (gen !== live.gen) return;
+        project.update(() => { seg.perspective = ph; delete seg.curbMarks; });
+        outputsStore.curbs = undefined; outputsStore.streetview = undefined; mode = 'idle'; repaintNav();
+        dropped = false; photoStage.render(side, canvas);
+        const m = side.querySelector('#msg'); if (m) m.textContent = 'The photo is saved, but the cars could not be removed (' + (err as Error).message + '). You can mark the curbs on it as it is.';
+      }
+    };
     const paint = () => {
       const picking = !p || mode === 'sv';
       side.innerHTML = `${head(4, 'Photo', 'The street photo the concepts are rendered on.')}
         ${task(1, 'Choose the source', p && mode === 'idle' ? 'done' : 'now', `
           <div class="row"><button class="btn${mode === 'sv' ? '' : ' ghost'}" id="sv">Google Street View</button><label class="btn ghost">Upload a photo<input id="file" type="file" accept="image/*" hidden></label></div>
-          <p class="note">Upload any eye-level photo looking along the street.</p>`)}
+          <p class="note">Upload any eye-level photo looking along the street.</p>
+          <label class="check-row"><input type="checkbox" id="clear"${clearCars ? ' checked' : ''}> Remove cars from the photo before marking curbs</label>`)}
         ${task(2, 'Approve the photo', p && mode === 'idle' ? 'done' : mode === 'sv' ? 'now' : 'later', mode === 'sv' ? `
           <p class="note">Street View is open at the start of your segment. Drag to turn, click the arrows on the road to move, scroll to zoom. Look straight along the street with both curbs in view. Nothing is captured until you approve.</p>
           <div class="row"><button class="btn" id="use">Use this view</button>${p ? '<button class="linkbtn" id="cancel">Keep the current photo</button>' : ''}</div>` : p ? `
-          <div class="mini"><img src="${esc(p.src)}" alt="Approved photo"><div><b class="okline">Photo approved</b><br><span class="note">${esc(p.source)}${p.credit ? ' · ' + esc(p.credit) : ''}</span></div></div>
+          <div class="mini"><img src="${esc(p.src)}" alt="Approved photo"><div><b class="okline">Photo approved</b><br><span class="note">${esc(p.source)}${p.credit ? ' · ' + esc(p.credit) : ''}${p.original ? ` · ${p.cleared ? p.cleared + ' vehicle' + (p.cleared === 1 ? '' : 's') + ' removed' : 'no vehicles found'}` : ''}</span></div></div>
+          <div class="row">${p.original ? '<button class="btn ghost" id="restore">Restore the original photo</button>' : '<button class="btn ghost" id="clearnow">Remove cars from this photo</button>'}</div>
           <p class="note">To change it, choose a source again above. Changing the photo clears the curbs.</p>` : '<p class="note">Choose a source first.</p>')}
         <p class="note" id="msg" role="status">${esc(msgText)}</p>`;
       void picking;
       const $ = (q: string) => side.querySelector(q) as HTMLElement | null;
+      $('#clear')!.addEventListener('change', e => { clearCars = (e.target as HTMLInputElement).checked; try { localStorage.setItem(CLEAR_KEY, clearCars ? '1' : '0'); } catch { /* ignore */ } });
+      $('#clearnow')?.addEventListener('click', () => { if (p) approve(p, true); });
+      $('#restore')?.addEventListener('click', () => { if (p?.original) { const { original, cleared: _c, ...rest } = p; setPhoto({ ...rest, src: original }); } });
       $('#sv')!.addEventListener('click', () => { mode = 'sv'; paint(); openSv(); });
       $('#cancel')?.addEventListener('click', () => { mode = 'idle'; photoStage.render(side, canvas); });
       $('#file')!.addEventListener('change', async e => {
         const f = (e.target as HTMLInputElement).files?.[0]; if (!f) return;
-        try { setPhoto({ src: await readImage(f), source: 'Upload', credit: f.name }); } catch (err) { msgText = (err as Error).message; paint(); }
+        try { await approve({ src: await readImage(f), source: 'Upload', credit: f.name }); } catch (err) { msgText = (err as Error).message; paint(); }
       });
       $('#use')?.addEventListener('click', () => {
         if (!pano) { msgText = 'Street View is still loading.'; paint(); return; }
         const pov = pano.getPov(), id = pano.getPano(), fov = Math.max(20, Math.min(120, 180 / Math.pow(2, pano.getZoom() ?? 1)));
         const loc = pano.getLocation?.()?.latLng, h = ((pov.heading % 360) + 360) % 360;
-        setPhoto({
+        approve({
           src: `https://maps.googleapis.com/maps/api/streetview?size=640x400&scale=2&pano=${id}&heading=${h.toFixed(1)}&pitch=${pov.pitch.toFixed(1)}&fov=${fov.toFixed(0)}&key=${GOOGLE_KEY}`,
           source: 'Google Street View', credit: '© Google', heading: h, at: loc ? [loc.lng(), loc.lat()] : undefined,
           link: loc ? `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${loc.lat()},${loc.lng()}&heading=${h.toFixed(0)}` : undefined
