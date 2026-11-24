@@ -108,7 +108,7 @@ export const siteStage: Stage = {
     });
 
     function showStreet(img: StreetImage) {
-      $('#svOut').innerHTML = `<figure class="sv"><img src="${esc(img.src)}" alt="Street-level view from ${esc(img.source)}" referrerpolicy="strict-origin-when-cross-origin">
+      $('#svOut').innerHTML = `<figure class="sv"><img src="${esc(img.src)}" alt="Street-level view from ${esc(img.source)}">
         <figcaption>${esc(img.source)} · ${esc(img.credit)}${img.link ? ` · <a href="${esc(img.link)}" target="_blank" rel="noopener">open</a>` : ''}</figcaption></figure>
         <button class="btn" id="useSv">Use for Visualize</button>`;
       $('#useSv').addEventListener('click', () => {
