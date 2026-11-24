@@ -142,9 +142,11 @@ export function fitRoad(sec: Section, target: number) {
   const r = split(sec).road, cur = r.reduce((a, e) => a + e.width_ft, 0);
   if (Math.abs(target - cur) > 0.01) absorb(r, target - cur, null);
   settle(split(sec).road, target, sec);
+  mergeBuffers(sec);   // widths moved: the one-buffer and post rules are applied again
 }
 
-// Adjacent bike buffers are one buffer (posts win over paint).
+// One buffer per side, always: adjacent bike buffers are one buffer; a post-separated bikeway beside a buffer uses that
+// buffer as its separation, 2 ft where the bikeway can spare it; posts need a buffer at least 1.5 ft wide.
 export function mergeBuffers(sec: Section) {
   const out: SectionElement[] = [];
   for (const e of sec.elements) {
@@ -152,5 +154,14 @@ export function mergeBuffers(sec: Section) {
     if (a && a.type === 'bike_buffer' && e.type === 'bike_buffer') { a.width_ft += e.width_ft; if (e.material === 'posts') a.material = 'posts'; a.lineRight = e.lineRight; }
     else out.push(e);
   }
+  out.forEach((e, k) => {
+    if (e.type !== 'separated_bikeway' || e.material === 'raised' || e.material === 'curb') return;
+    const order = e.direction === 'inbound' ? [k + 1, k - 1] : [k - 1, k + 1];
+    const buf = order.map(j => out[j]).find(x => x?.type === 'bike_buffer');
+    if (!buf) return;
+    if (buf.width_ft < 2 && e.width_ft - (2 - buf.width_ft) >= 5) { e.width_ft -= 2 - buf.width_ft; buf.width_ft = 2; }
+    buf.material = 'posts';
+  });
+  for (const e of out) if (e.type === 'bike_buffer' && e.material === 'posts' && e.width_ft < 1.5) e.material = 'paint';
   sec.elements = out;
 }

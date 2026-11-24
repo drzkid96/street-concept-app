@@ -7,6 +7,7 @@ import { bearing, type LngLat } from '../lib/providers';
 import { GOOGLE_KEY } from '../lib/config';
 import { head, task, esc } from './ui';
 import { loadMaps } from '../lib/providers';
+import { hiresStreetView } from '../lib/hires';
 
 function readImage(file: File, max = 1800): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -55,6 +56,7 @@ export async function verifyPhoto(): Promise<boolean> {
   return true;
 }
 
+(window as any).__hires = hiresStreetView;
 let mode: 'idle' | 'sv' = 'idle';
 const CLEAR_KEY = 'sca-clear-cars';
 let clearCars = (() => { try { return localStorage.getItem(CLEAR_KEY) === '1'; } catch { return false; } })();
@@ -128,15 +130,25 @@ export const photoStage: Stage = {
         const f = (e.target as HTMLInputElement).files?.[0]; if (!f) return;
         try { await approve({ src: await readImage(f), source: 'Upload', credit: f.name }); } catch (err) { msgText = (err as Error).message; paint(); }
       });
-      $('#use')?.addEventListener('click', () => {
+      $('#use')?.addEventListener('click', async () => {
         if (!pano) { msgText = 'Street View is still loading.'; paint(); return; }
+        if (working) return;
         const pov = pano.getPov(), id = pano.getPano(), fov = Math.max(20, Math.min(120, 180 / Math.pow(2, pano.getZoom() ?? 1)));
         const loc = pano.getLocation?.()?.latLng, h = ((pov.heading % 360) + 360) % 360;
-        approve({
-          src: `https://maps.googleapis.com/maps/api/streetview?size=640x400&scale=2&pano=${id}&heading=${h.toFixed(1)}&pitch=${pov.pitch.toFixed(1)}&fov=${fov.toFixed(0)}&key=${GOOGLE_KEY}`,
-          source: 'Google Street View', credit: '© Google', heading: h, at: loc ? [loc.lng(), loc.lat()] : undefined,
+        const base = {
+          source: 'Google Street View', credit: '© Google', heading: h, at: loc ? [loc.lng(), loc.lat()] as [number, number] : undefined,
           link: loc ? `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${loc.lat()},${loc.lng()}&heading=${h.toFixed(0)}` : undefined
-        });
+        };
+        working = true; say('Capturing the view at full resolution…');
+        side.querySelectorAll('button').forEach(x => ((x as HTMLButtonElement).disabled = true));
+        let src: string;
+        try { src = await hiresStreetView(id, h, pov.pitch, fov, GOOGLE_KEY, (a, b) => say(`Capturing the view at full resolution… ${a} of ${b}`)); }
+        catch {   // the single frame Google serves directly: coarser, but never a dead end
+          src = `https://maps.googleapis.com/maps/api/streetview?size=640x400&scale=2&pano=${id}&heading=${h.toFixed(1)}&pitch=${pov.pitch.toFixed(1)}&fov=${fov.toFixed(0)}&key=${GOOGLE_KEY}`;
+        }
+        working = false;
+        if (gen !== live.gen) return;
+        approve({ src, ...base });
       });
     };
     const say = (t: string) => { msgText = t; const m = side.querySelector('#msg'); if (m) m.textContent = t; };
