@@ -176,7 +176,7 @@ export const buildStage: Stage = {
           const c = await engine.form('/api/curbs/restore', fd) as { job: string };
           renderJob = c.job;
           let r: any, settled = false;
-          const runP = engine.json('/api/streetview/run', { job: c.job, project: pf, street: seg.limits.from || pf.project.name, looking: outputsStore.look, title: pf.project.name, setting: seg.setting, inpaint: ((seg.perspective?.original ?? seg.perspective?.src) || '').startsWith('https://maps.googleapis.com') ? undefined : [] }).catch(() => null).then(x => { settled = true; return x; });
+          const runP = engine.json('/api/streetview/run', { job: c.job, project: pf, street: seg.limits.from || pf.project.name, looking: outputsStore.look, title: pf.project.name, setting: seg.setting, inpaint: !seg.perspective?.edited && ((seg.perspective?.original ?? seg.perspective?.src) || '').startsWith('https://maps.googleapis.com') ? undefined : [] }).catch(() => null).then(x => { settled = true; return x; });
           const rt = prog.tasks.find(x => x.key === rk);
           while (!settled) {   // the engine reports each rendering step: the bar follows it
             await Promise.race([runP, new Promise(res => setTimeout(res, 3000))]);

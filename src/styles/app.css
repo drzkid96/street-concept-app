@@ -235,3 +235,8 @@ details.task .sum{font-weight:400;font-size:.78rem;color:var(--muted);white-spac
 .progbar{height:10px;border-radius:6px;background:#E7E8E8;overflow:hidden;margin:.45rem 0 .4rem}
 .progfill{height:100%;width:1%;background:var(--fp-jade,#1B795A);border-radius:6px;transition:width .5s linear}
 .prognow{font-size:.82rem;color:#5b6b70;min-height:1.1em}
+
+.steps{margin:.5rem 0 .6rem 1.1rem;padding:0;font-size:.85rem;color:#3c4a4f;display:grid;gap:.3rem}
+.steps kbd{font:inherit;font-size:.78rem;border:1px solid #c9cfcc;border-radius:4px;padding:0 .3rem;background:#f6f7f6}
+.row.minor{gap:.9rem;margin-top:.2rem}
+.row.minor .linkbtn{font-size:.82rem}

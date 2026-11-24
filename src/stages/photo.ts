@@ -58,6 +58,40 @@ export async function verifyPhoto(): Promise<boolean> {
 
 (window as any).__hires = hiresStreetView;
 let mode: 'idle' | 'sv' = 'idle';
+/** The full instruction for an image model: vehicles out, curb and frontage rebuilt, colour touch-ups, same frame. */
+export function editPrompt(w: number, h: number): string {
+  return [
+    `Edit the attached street photo and return ONE edited image at exactly the same framing, camera position, perspective, aspect ratio and size (${w} x ${h} px). Do not crop, zoom, rotate, widen or re-compose it.`,
+    '',
+    'REMOVE: every vehicle in the photo, parked and moving (cars, trucks, vans, buses, motorcycles, trailers), with their shadows and reflections. Also remove trash bins left in the roadway and any watermark or logo.',
+    '',
+    'REBUILD what the vehicles were hiding, matching the rest of the photo exactly:',
+    '- Curb line: one continuous, sharp, straight curb and gutter on each side, running true to the visible curb on either side of each gap and to the vanishing point. The curb edge must be crisp, never smudged, blurred, wavy or broken. Keep painted curb colours where they exist.',
+    '- Pavement: the same asphalt or concrete, with the existing lane lines, stop bars, crosswalks and pavement legends continued where they were hidden.',
+    '- Parkway and sidewalk: the same grass, planting, tree wells, driveways and sidewalk scoring.',
+    '- Frontage: the lower walls, fences, hedges, doors and windows of the buildings behind the vehicles, consistent with each building.',
+    '',
+    'DO NOT CHANGE: curb positions, street width, lane lines and pavement markings that are visible, signs, poles, trees, buildings, the sky, people on the sidewalk, or the time of day. Add nothing new: no vehicles, people, bike lanes, planters or street furniture.',
+    '',
+    'COLOUR TOUCH-UPS, subtle and natural: neutral white balance, even exposure, gently lifted shadows and recovered highlights, slightly more clarity and local contrast on the pavement and curbs, natural saturation, haze cleared from the distance. No filters, no HDR look, no vignette.',
+    '',
+    'The result must look like an unedited photograph of the same empty street. Return only the image.'
+  ].join('\n');
+}
+const imageOf = (src: string) => fetch(src).then(x => { if (!x.ok) throw new Error('the photo could not be loaded'); return x.blob(); }).then(b => createImageBitmap(b));
+async function pngOf(src: string): Promise<Blob> {
+  const bm = await imageOf(src), c = document.createElement('canvas'); c.width = bm.width; c.height = bm.height;
+  c.getContext('2d')!.drawImage(bm, 0, 0);
+  return new Promise((res, rej) => c.toBlob(b => b ? res(b) : rej(new Error('the photo could not be prepared')), 'image/png'));
+}
+/** The edited picture, fitted back to the size of the photo it came from (centre-cropped if the model changed the shape). */
+async function fitTo(file: File, w: number, h: number): Promise<{ src: string; reshaped: boolean }> {
+  const bm = await createImageBitmap(file), c = document.createElement('canvas'); c.width = w; c.height = h;
+  const ar = w / h, br = bm.width / bm.height; let sx = 0, sy = 0, sw = bm.width, sh = bm.height;
+  if (br > ar) { sw = bm.height * ar; sx = (bm.width - sw) / 2; } else { sh = bm.width / ar; sy = (bm.height - sh) / 2; }
+  const g = c.getContext('2d')!; g.imageSmoothingQuality = 'high'; g.drawImage(bm, sx, sy, sw, sh, 0, 0, w, h);
+  return { src: c.toDataURL('image/jpeg', 0.9), reshaped: Math.abs(br / ar - 1) > 0.03 };
+}
 const CLEAR_KEY = 'sca-clear-cars';
 let clearCars = (() => { try { return localStorage.getItem(CLEAR_KEY) === '1'; } catch { return false; } })();
 let working = false;
@@ -115,15 +149,63 @@ export const photoStage: Stage = {
         ${task(2, 'Approve the photo', p && mode === 'idle' ? 'done' : mode === 'sv' ? 'now' : 'later', mode === 'sv' ? `
           <p class="note">Street View is open at the start of your segment. Drag to turn, click the arrows on the road to move, scroll to zoom. Look straight along the street with both curbs in view. Nothing is captured until you approve.</p>
           <div class="row"><button class="btn" id="use">Use this view</button>${p ? '<button class="linkbtn" id="cancel">Keep the current photo</button>' : ''}</div>` : p ? `
-          <div class="mini"><img src="${esc(p.src)}" alt="Approved photo"><div><b class="okline">Photo approved</b><br><span class="note">${esc(p.source)}${p.credit ? ' · ' + esc(p.credit) : ''}${p.original ? ` · ${p.cleared ? p.cleared + ' vehicle' + (p.cleared === 1 ? '' : 's') + ' removed' : 'no vehicles found'}` : ''}</span></div></div>
-          <div class="row">${p.original ? '<button class="btn ghost" id="restore">Restore the original photo</button>' : '<button class="btn ghost" id="clearnow">Remove cars from this photo</button>'}</div>
+          <div class="mini"><img src="${esc(p.src)}" alt="Approved photo"><div><b class="okline">Photo approved</b><br><span class="note">${esc(p.source)}${p.credit ? ' · ' + esc(p.credit) : ''}${p.original ? ` · ${p.edited ? 'your edited version' : p.cleared ? p.cleared + ' vehicle' + (p.cleared === 1 ? '' : 's') + ' removed' : 'no vehicles found'}` : ''}</span></div></div>
+
           <p class="note">To change it, choose a source again above. Changing the photo clears the curbs.</p>` : '<p class="note">Choose a source first.</p>')}
+        ${p && mode === 'idle' ? task(3, 'Clean up the photo (optional)', 'now', `
+          <p class="note"><b>Best result: ChatGPT or Gemini.</b> They remove the cars, rebuild the curb line, planting and frontage, and touch up the colour. The full instruction is written for you.</p>
+          <div class="row"><button class="btn" id="gpt">Open ChatGPT</button><button class="btn" id="gem">Open Gemini</button></div>
+          <ol class="steps">
+            <li><b>ChatGPT:</b> opens with the instruction filled in and the photo copied. Press <kbd>Ctrl</kbd>+<kbd>V</kbd> to paste the photo, then send.</li>
+            <li><b>Gemini:</b> opens with the instruction copied and the photo downloaded. Paste the instruction, attach the photo, then send.</li>
+            <li>Save the edited image, then bring it back here.</li>
+          </ol>
+          <div class="row"><label class="btn ghost">Upload the edited photo<input id="edited" type="file" accept="image/*" hidden></label></div>
+          <div class="row minor"><button class="linkbtn" id="cpP">Copy the instruction</button><button class="linkbtn" id="cpI">Copy the photo</button><button class="linkbtn" id="dlI">Download the photo</button></div>
+          <p class="note">Or here, quicker and rougher: ${p.original ? '<button class="linkbtn" id="restore">restore the original photo</button>' : '<button class="linkbtn" id="clearnow">remove the cars automatically</button>'}</p>`) : ''}
         <p class="note" id="msg" role="status">${esc(msgText)}</p>`;
       void picking;
       const $ = (q: string) => side.querySelector(q) as HTMLElement | null;
       $('#clear')!.addEventListener('change', e => { clearCars = (e.target as HTMLInputElement).checked; try { localStorage.setItem(CLEAR_KEY, clearCars ? '1' : '0'); } catch { /* ignore */ } });
+      // the photo as taken goes out for editing, never an earlier edit of it
+      const srcOut = () => p!.original ?? p!.src;
+      const dims = async () => { const bm = await imageOf(srcOut()); return [bm.width, bm.height] as const; };
+      const copyText = (t: string) => navigator.clipboard.writeText(t);
+      const copyPhoto = async () => navigator.clipboard.write([new ClipboardItem({ 'image/png': pngOf(srcOut()) })]);
+      const download = async () => { const b = await pngOf(srcOut()), a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'street-photo.png'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); };
+      // copy first (the page must still have focus), then open: both happen inside the click's own few seconds of permission
+      const openTo = (url: string, okText: string) => {
+        const win = window.open(url, '_blank');
+        const m = side.querySelector('#msg');
+        if (win) say(okText);
+        else if (m) { m.innerHTML = `Your browser blocked the new tab. <a href="${esc(url)}" target="_blank" rel="noopener">Open it here</a>. ${esc(okText)}`; }
+      };
+      $('#gpt')?.addEventListener('click', async () => {
+        try {
+          const [w, h] = await dims(); let pasted = true;
+          await copyPhoto().catch(async () => { pasted = false; await download(); });
+          openTo('https://chatgpt.com/?prompt=' + encodeURIComponent(editPrompt(w, h)), pasted ? 'ChatGPT is open with the instruction filled in. Paste the photo there (Ctrl+V), send, save the result, then upload it here.' : 'ChatGPT is open with the instruction filled in. Attach the downloaded photo (street-photo.png), send, save the result, then upload it here.');
+        } catch (err) { say('Could not prepare the photo: ' + (err as Error).message); }
+      });
+      $('#gem')?.addEventListener('click', async () => {
+        try {
+          const [w, h] = await dims(); await copyText(editPrompt(w, h)); await download();
+          openTo('https://gemini.google.com/app', 'Gemini is open. Paste the instruction (Ctrl+V), attach the downloaded photo (street-photo.png), send, save the result, then upload it here.');
+        } catch (err) { say('Could not prepare the photo: ' + (err as Error).message); }
+      });
+      $('#cpP')?.addEventListener('click', async () => { try { const [w, h] = await dims(); await copyText(editPrompt(w, h)); say('Instruction copied.'); } catch (err) { say((err as Error).message); } });
+      $('#cpI')?.addEventListener('click', () => copyPhoto().then(() => say('Photo copied.'), err => say('The photo could not be copied (' + (err as Error).message + '). Use Download instead.')));
+      $('#dlI')?.addEventListener('click', () => download().catch(err => say((err as Error).message)));
+      $('#edited')?.addEventListener('change', async e => {
+        const f = (e.target as HTMLInputElement).files?.[0]; if (!f || !p) return;
+        try {
+          const [w, h] = await dims(), r = await fitTo(f, w, h);
+          const { cleared: _c, ...rest } = p;
+          setPhoto({ ...rest, src: r.src, original: srcOut(), edited: true });
+        } catch (err) { say('That file could not be used: ' + (err as Error).message); }
+      });
       $('#clearnow')?.addEventListener('click', () => { if (p) approve(p, true); });
-      $('#restore')?.addEventListener('click', () => { if (p?.original) { const { original, cleared: _c, ...rest } = p; setPhoto({ ...rest, src: original }); } });
+      $('#restore')?.addEventListener('click', () => { if (p?.original) { const { original, cleared: _c, edited: _e, ...rest } = p; setPhoto({ ...rest, src: original }); } });
       $('#sv')!.addEventListener('click', () => { mode = 'sv'; paint(); openSv(); });
       $('#cancel')?.addEventListener('click', () => { mode = 'idle'; photoStage.render(side, canvas); });
       $('#file')!.addEventListener('change', async e => {

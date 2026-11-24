@@ -69,6 +69,7 @@ export interface Perspective {
   heading?: number;
   original?: string;      // the photo as taken, when the cars were removed from src
   cleared?: number;       // vehicles removed
+  edited?: boolean;       // the person's own edit of the photo (ChatGPT, Gemini or any editor), uploaded back
   at?: [number, number];  // where the photo was taken (lng, lat), to catch a photo left over from another segment
   vp?: [number, number];  // vanishing point, fraction of image width/height
   cam?: { fov: number; h: number; xcam: number; horizon: number; cx: number }; // auto-scale camera
