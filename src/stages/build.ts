@@ -3,8 +3,9 @@ import { live, repaintNav, goTo, type Stage } from './index';
 import { project } from '../lib/project';
 import { engine, outputsStore, curbsOk } from '../lib/engine';
 import { head, task, more, esc } from './ui';
+import { aerialOf, type LngLat } from '../lib/providers';
 
-const want = { render: true, sections: true, cost: false, zip: false };
+const want = { render: true, sections: true, existing: false, cost: false, zip: false };
 let method = 'default';
 let renderJob = '';
 let costFmt: 'excel' | 'pdf' = 'excel';
@@ -28,12 +29,13 @@ export const buildStage: Stage = {
     const canRender = inputs[0][0] && inputs[2][0] && inputs[4][0];
     const canCost = inputs[0][0] && inputs[2][0];
     const paint = () => {
-      const any = (want.render && canRender) || (want.sections && canCost) || (want.cost && canCost) || want.zip;
+      const any = (want.render && canRender) || (want.sections && canCost) || (want.cost && canCost) || want.existing || want.zip;
       side.innerHTML = `${head(6, 'Build', 'Everything is built from the inputs in steps 1 to 5, in one run.')}
         ${task(1, 'Inputs', inputs.every(i => i[0]) ? 'done' : 'now', `<ul class="checklist">${inputs.map(([ok, label, id, need]) => `<li class="${ok ? 'ok' : 'no'}"><span class="dot"></span><div><b>${esc(label)}</b>${ok ? '' : `<span><a href="#${id}">${esc(need)}</a></span>`}</div></li>`).join('')}</ul>`)}
         ${task(2, 'Choose the outputs', 'now', `
           <label class="pick"><input type="checkbox" id="wr"${want.render && canRender ? ' checked' : ''}${canRender ? '' : ' disabled'}><span><b>Concept renderings sheet</b><small>Each alternative rendered on the photo with FP assets, with key map, location, existing and proposed sections. A few minutes.${canRender ? '' : ' Needs approved curbs.'}</small></span></label>
 <label class="pick"><input type="checkbox" id="ws"${want.sections && canCost ? ' checked' : ''}${canCost ? '' : ' disabled'}><span><b>Concept sections sheet</b><small>Existing and every concept, with the key map. No costs.</small></span></label>
+          <label class="pick"><input type="checkbox" id="we"${want.existing ? ' checked' : ''}><span><b>Existing conditions report (optional)</b><small>Two pages from OpenStreetMap: aerial with traffic control and points of interest, street facts, Street View, existing section, land use, cross streets and transit.</small></span></label>
           <label class="pick"><input type="checkbox" id="wc"${want.cost && canCost ? ' checked' : ''}${canCost ? '' : ' disabled'}><span><b>Cost estimate (optional)</b><small>Planning-level costs by delivery tier for ${esc(seg.city ?? 'Los Angeles')}.</small>
             ${want.cost ? `<span class="fmt"><label><input type="radio" name="cf" value="excel"${costFmt === 'excel' ? ' checked' : ''}> Excel workbook</label><label><input type="radio" name="cf" value="pdf"${costFmt === 'pdf' ? ' checked' : ''}> PDF sheet, in the package</label></span>` : ''}</span></label>
           <label class="pick"><input type="checkbox" id="wz"${want.zip ? ' checked' : ''}><span><b>AI handoff ZIP (optional)</b><small>The project, the exact skill inputs (sections, photo, approved curbs) and every output, with a README, so another AI or person can pick it up and re-run it.</small></span></label>
@@ -47,6 +49,7 @@ export const buildStage: Stage = {
       side.querySelector('#ws')?.addEventListener('change', e => { want.sections = (e.target as HTMLInputElement).checked; paint(); });
       side.querySelector('#wc')?.addEventListener('change', e => { want.cost = (e.target as HTMLInputElement).checked; paint(); });
       side.querySelectorAll<HTMLInputElement>('input[name=cf]').forEach(r => r.addEventListener('change', () => { costFmt = r.value as typeof costFmt; }));
+      side.querySelector('#we')?.addEventListener('change', e => { want.existing = (e.target as HTMLInputElement).checked; paint(); });
       side.querySelector('#wz')?.addEventListener('change', e => { want.zip = (e.target as HTMLInputElement).checked; paint(); });
       side.querySelector('#mode')?.addEventListener('change', e => { method = (e.target as HTMLSelectElement).value; });
       side.querySelector('#go')?.addEventListener('click', build);
@@ -62,6 +65,20 @@ export const buildStage: Stage = {
       const pf = structuredClone(project.get()); pf.segments.forEach(g => { g.alternatives = g.alternatives.filter(a => a.enabled !== false); });
       const say = (t: string) => { log.push(t); if (gen === live.gen) paint(); };
       outputsStore.compiled = undefined;
+      if (!want.existing) outputsStore.existingReport = undefined;
+      else {
+        say('Existing conditions report: reading OpenStreetMap and laying out…');
+        try {
+          const path = (seg.path ?? []) as LngLat[];
+          const aerial = await aerialOf(path).then(a => ({ ...a, source: 'Google' })).catch(() => undefined);   // without it the engine uses USGS imagery
+          let photo: string | undefined;
+          if (seg.perspective) photo = await fetch(seg.perspective.src).then(x => x.blob()).then(b => new Promise<string>(res => { const fr = new FileReader(); fr.onload = () => res(fr.result as string); fr.readAsDataURL(b); })).catch(() => undefined);
+          const r = await engine.json('/api/existing-report', { project: pf, aerial, photo, photo_credit: seg.perspective ? `${seg.perspective.source}${seg.perspective.credit ? ', ' + seg.perspective.credit : ''}. Looking along the segment.` : undefined });
+          outputsStore.existingReport = { job: r.job, pdf: r.pdf };
+          log[log.length - 1] = 'Existing conditions report: done.';
+        } catch (err) { log[log.length - 1] = 'Existing conditions report: stopped. ' + (err as Error).message; }
+        if (gen === live.gen) paint();
+      }
       if (!(want.cost && canCost)) outputsStore.concepts = undefined;
       if (!(want.sections && canCost)) outputsStore.sections = undefined;
       if (!(want.render && canRender)) outputsStore.streetview = undefined;
@@ -108,7 +125,7 @@ export const buildStage: Stage = {
           log[log.length - 1] = `Concept renderings: done (${outputsStore.streetview.renders.length} rendering${outputsStore.streetview.renders.length === 1 ? '' : 's'}, sheet PDF).`;
         } catch (err) { log[log.length - 1] = 'Concept renderings: ' + (err as Error).message; }
       }
-      const urls = [...(outputsStore.streetview?.pdfs ?? []).map(f => f.url), ...(outputsStore.sections ? [outputsStore.sections.pdf] : []), ...(outputsStore.concepts?.fmt === 'pdf' && outputsStore.concepts.pdf ? [outputsStore.concepts.pdf] : [])];
+      const urls = [...(outputsStore.existingReport ? [outputsStore.existingReport.pdf] : []), ...(outputsStore.streetview?.pdfs ?? []).map(f => f.url), ...(outputsStore.sections ? [outputsStore.sections.pdf] : []), ...(outputsStore.concepts?.fmt === 'pdf' && outputsStore.concepts.pdf ? [outputsStore.concepts.pdf] : [])];
       if (urls.length) {
         say('Compiling the PDF set…');
         try { const r = await engine.json('/api/compile', { urls, name: pf.project.name || seg.limits.from }); outputsStore.compiled = { job: r.job, pdf: r.pdf, pages: r.pages }; log[log.length - 1] = `PDF set: ${r.pages} page${r.pages === 1 ? '' : 's'} compiled.`; }
@@ -117,7 +134,7 @@ export const buildStage: Stage = {
       if (want.zip) {
         say('AI handoff ZIP: packing…');
         try {
-          const r = await engine.json('/api/handoff', { project: pf, jobs: { compiled: outputsStore.compiled?.job, sections: outputsStore.sections?.job, concepts: outputsStore.concepts?.job, curbs: renderJob || undefined, streetview: outputsStore.streetview?.job } });
+          const r = await engine.json('/api/handoff', { project: pf, jobs: { existing: outputsStore.existingReport?.job, compiled: outputsStore.compiled?.job, sections: outputsStore.sections?.job, concepts: outputsStore.concepts?.job, curbs: renderJob || undefined, streetview: outputsStore.streetview?.job } });
           outputsStore.handoff = { zip: r.zip, name: r.name, bytes: r.bytes };
           log[log.length - 1] = `AI handoff ZIP: done (${Math.round(r.bytes / 1024 / 1024 * 10) / 10} MB).`;
         } catch (err) { log[log.length - 1] = 'AI handoff ZIP: stopped. ' + (err as Error).message; }

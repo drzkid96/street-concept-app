@@ -12,7 +12,7 @@ export const sheetsStage: Stage = {
   async render(side, canvas) {
     const gen = live.gen, seg = project.seg();
     if (await engine.check()) {
-      const parts = [...(outputsStore.streetview?.pdfs ?? []).map(f => ({ name: 'Concept renderings sheet', url: f.url })), ...(outputsStore.sections ? [{ name: 'Concept sections sheet', url: outputsStore.sections.pdf }] : [])];
+      const parts = [...(outputsStore.existingReport ? [{ name: 'Existing conditions report', url: outputsStore.existingReport.pdf }] : []), ...(outputsStore.streetview?.pdfs ?? []).map(f => ({ name: 'Concept renderings sheet', url: f.url })), ...(outputsStore.sections ? [{ name: 'Concept sections sheet', url: outputsStore.sections.pdf }] : [])];
       const list = [...(outputsStore.compiled ? [{ name: `Compiled PDF set (${outputsStore.compiled.pages} pages)`, url: outputsStore.compiled.pdf }] : []), ...parts];
       let shown0 = 0;
       if (gen !== live.gen) return;
