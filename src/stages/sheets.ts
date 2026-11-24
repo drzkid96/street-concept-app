@@ -12,24 +12,21 @@ export const sheetsStage: Stage = {
   async render(side, canvas) {
     const gen = live.gen, seg = project.seg();
     if (await engine.check()) {
-      const parts = [...(outputsStore.streetview?.pdfs ?? []).map(f => ({ name: 'Concept renderings sheet', url: f.url })), ...(outputsStore.sections ? [{ name: 'Concept sections sheet', url: outputsStore.sections.pdf }] : []),
-        ...(outputsStore.concepts ? [{ name: 'Cost estimate', url: outputsStore.concepts.pdf }] : [])];
+      const parts = [...(outputsStore.streetview?.pdfs ?? []).map(f => ({ name: 'Concept renderings sheet', url: f.url })), ...(outputsStore.sections ? [{ name: 'Concept sections sheet', url: outputsStore.sections.pdf }] : [])];
       const list = [...(outputsStore.compiled ? [{ name: `Compiled PDF set (${outputsStore.compiled.pages} pages)`, url: outputsStore.compiled.pdf }] : []), ...parts];
       let shown0 = 0;
       if (gen !== live.gen) return;
       const pf = project.get();
       let shown = shown0;
-      side.innerHTML = `${head(7, 'Review', 'Every output from the build. Read them, then mark them up for revisions or approve them.')}
-        ${task(1, 'Read the outputs', list.length ? 'now' : 'later', list.length ? `<ul class="filelist">${list.map((f, i) => `<li><button class="linkbtn" data-i="${i}">${esc(f.name)}</button><a class="note" target="_blank" rel="noopener" href="${engine.abs(f.url)}">open in new tab</a></li>`).join('')}</ul>` :
+      side.innerHTML = `${head(7, 'Review', 'The package opens in the markup tool: draw callouts, clouds and boxes, then press Send for revisions, or Approved.')}
+        ${task(1, 'Package', list.length ? 'now' : 'later', list.length ? `<div class="row"><button class="btn" id="open">Mark up</button></div><ul class="filelist">${list.map((f, i) => `<li><span>${esc(f.name)}</span><span><button class="linkbtn" data-i="${i}">view PDF</button> · <a class="linkbtn" target="_blank" rel="noopener" href="${engine.abs(f.url)}">open</a></span></li>`).join('')}</ul>` :
           `<p class="note">Nothing built yet. Go to <a href="#build">Build</a>.</p>`)}
+        ${outputsStore.concepts?.xlsx ? `<p class="row"><a class="btn ghost" href="${engine.abs(outputsStore.concepts.xlsx)}" download>Download cost estimate (Excel)</a></p>` : ''}
         ${outputsStore.handoff ? `<p class="row"><a class="btn ghost" href="${engine.abs(outputsStore.handoff.zip)}" download="${esc(outputsStore.handoff.name)}">Download AI handoff ZIP</a></p>` : ''}
-        ${task(2, 'Mark up or approve', list.length ? 'now' : 'later', `
-          <p class="note">Opens the markup viewer on every sheet: draw callouts, clouds and boxes, then press <b>Send</b> for revisions, or <b>Approved</b>.</p>
-          <div class="row"><button class="btn" id="open"${list.length ? '' : ' disabled'}>Open markup viewer</button></div>`)}
         <p class="note" id="msg" role="status"></p>`;
       const preview = () => { canvas.innerHTML = list.length ? `<iframe class="guide" title="Sheet" src="${engine.abs(list[shown].url)}"></iframe>` : '<div class="empty">Your sheets appear here.</div>'; };
       side.querySelectorAll<HTMLElement>('[data-i]').forEach(b => b.addEventListener('click', () => { shown = +b.dataset.i!; preview(); }));
-      side.querySelector('#open')!.addEventListener('click', async () => {
+      const openMarkup = async () => {
         side.querySelector('#msg')!.textContent = 'Opening the markup viewer…';
         try {
           const fd = new FormData(); fd.append('title', pf.project.name || 'Street concepts'); fd.append('rev', String(1 + pf.review.filter(r => r.kind === 'approved').length)); fd.append('urls', JSON.stringify(parts.map(f => f.url)));
@@ -37,9 +34,10 @@ export const sheetsStage: Stage = {
           if (gen !== live.gen) return;
           canvas.innerHTML = `<iframe class="guide" title="Markup viewer" src="${engine.abs(r.page)}"></iframe>`;
           side.querySelector('#msg')!.textContent = 'Your markups save as you draw.';
-        } catch (err) { side.querySelector('#msg')!.textContent = (err as Error).message; }
-      });
-      preview();
+        } catch (err) { preview(); side.querySelector('#msg')!.textContent = 'The markup tool did not open (' + (err as Error).message + '). Showing the PDF instead.'; }
+      };
+      side.querySelector('#open')?.addEventListener('click', openMarkup);
+      if (parts.length) { canvas.innerHTML = '<div class="empty">Opening the markup tool…</div>'; openMarkup(); } else preview();
       return;
     }
     const missing = [!seg.length_ft && 'segment length (Site)', !seg.keymap && 'key map (Site, Save key map)', !seg.alternatives.length && 'alternatives', !seg.alternatives.some(a => a.render) && 'concept renderings (Visualize)'].filter(Boolean);

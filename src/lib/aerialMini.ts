@@ -30,7 +30,14 @@ export function aerialMini(host: HTMLElement, path: LngLat[]) {
     }
   };
   styleFor('google-satellite').then(st => { map.setStyle(st as any); map.once('styledata', () => setTimeout(draw, 50)); }).catch(() => { out.textContent = 'The aerial could not load.'; });
-  map.on('load', () => { if (path.length > 1) map.fitBounds([[Math.min(...xs), Math.min(...ys)], [Math.max(...xs), Math.max(...ys)]], { padding: 40, maxZoom: 20, duration: 0 }); });
+  const fitSeg = () => {
+    if (path.length < 2) return;
+    const lat = ys[0], dy = 50 / 364000, dx = dy / Math.cos(lat * Math.PI / 180);   // about 50 ft around the segment
+    map.setMinZoom(0);
+    map.fitBounds([[Math.min(...xs) - dx, Math.min(...ys) - dy], [Math.max(...xs) + dx, Math.max(...ys) + dy]], { padding: 8, maxZoom: 21, duration: 0 });
+    map.setMinZoom(map.getZoom());   // zooming out stops here; panning stays free
+  };
+  map.on('load', fitSeg); const ro = new ResizeObserver(() => { try { map.resize(); fitSeg(); } catch { /* map removed */ } }); ro.observe(el);
   map.on('idle', draw);
   map.on('click', e => {
     if (!measuring) return;
@@ -41,5 +48,5 @@ export function aerialMini(host: HTMLElement, path: LngLat[]) {
   });
   btn.addEventListener('click', () => { measuring = !measuring; btn.setAttribute('aria-pressed', String(measuring)); map.getCanvas().style.cursor = measuring ? 'crosshair' : ''; out.textContent = measuring ? 'Click two points, for example curb to lane line.' : 'Measure a lane: press Measure, then click two points.'; });
   host.querySelector('[data-m=clear]')!.addEventListener('click', () => { pts = []; draw(); out.textContent = measuring ? 'Click two points.' : ''; });
-  return () => map.remove();
+  return () => { ro.disconnect(); map.remove(); };
 }

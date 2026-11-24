@@ -20,9 +20,10 @@ export const engine = {
   async json<T = any>(path: string, body: unknown): Promise<T> {
     const r = await fetch(this.url + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(j.detail || `Engine error ${r.status}`);
+    if (!r.ok) throw new Error(typeof j.detail === 'string' ? j.detail : r.status >= 502 ? 'The engine was busy or restarting. Try again in a moment.' : `Engine error ${r.status}`);
     return j;
   },
+  async get<T = any>(path: string): Promise<T> { return (await fetch(this.url + path)).json(); },
   async form<T = any>(path: string, fd: FormData): Promise<T> {
     const r = await fetch(this.url + path, { method: 'POST', body: fd });
     const j = await r.json().catch(() => ({}));
@@ -37,7 +38,7 @@ export interface EngineFile { name: string; url: string; bytes: number }
 // Last engine outputs for this browser session, shared by Cost, Visualize, Sheets and Review.
 export interface CurbStatus { hz: boolean; L: number; R: number; Lai: number; Rai: number; done: boolean }
 export const outputsStore: {
-  concepts?: { job: string; pdf: string; png?: string; summary: string[] };
+  concepts?: { job: string; pdf: string; png?: string; fmt?: 'excel' | 'pdf'; xlsx?: string; summary: string[] };
   streetview?: { job: string; pdfs: EngineFile[]; renders: EngineFile[] };
   look?: string;
   sections?: { job: string; pdf: string };

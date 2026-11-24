@@ -5,22 +5,36 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="referrer" content="no-referrer-when-downgrade">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%226%22 fill=%22%2300574A%22/%3E%3Cpath d=%22M9 28L14 4M23 28L18 4%22 stroke=%22%236BD688%22 stroke-width=%223%22/%3E%3C/svg%3E">
-  <title>Street Concept App</title>
+  <title>StreetFlow</title>
   <meta name="description" content="Street concept packages for Southern California: site, existing section, alternatives, cost, renderings, sheets, review.">
 </head>
 <body>
   <div class="app">
     <header class="top">
-      <h1>STREET CONCEPT APP</h1>
+      <a class="brand" href="#site" aria-label="StreetFlow">
+        <svg viewBox="0 0 40 40" width="34" height="34" aria-hidden="true"><rect width="40" height="40" rx="9" fill="#00574A"/><path d="M8 31c7-1 9-6 12-11s5-10 12-11" fill="none" stroke="#00242E" stroke-width="9" stroke-linecap="round"/><path d="M8 31c7-1 9-6 12-11s5-10 12-11" fill="none" stroke="#6BD688" stroke-width="2" stroke-linecap="round" stroke-dasharray="4 4"/></svg>
+        <span><b>StreetFlow</b><small>Street concepts, from segment to sheets</small></span></a>
       <div class="addr" id="addr" aria-live="polite" hidden></div>
-      <div class="proj"><button class="pill" id="eng" title="Skills engine">Engine…</button><input id="proj-name" aria-label="Project name" placeholder="Project name"></div>
+      <div class="proj"><button class="btn ghost sm" id="restart" title="Clear this project and start a new one">Restart</button><button class="pill" id="eng" title="Skills engine">Engine…</button><input id="proj-name" aria-label="Project name" placeholder="Project name"></div>
     </header>
     <nav class="stages" id="stages" aria-label="Stages"></nav>
     <div class="work">
-      <div class="sidecol"><aside class="side" id="side"></aside><nav class="stepnav" id="stepnav" aria-label="Step navigation"></nav></div>
+      <div class="sidecol"><aside class="side" id="side"></aside><nav class="stepnav" id="stepnav" aria-label="Step navigation"></nav>
+        <footer class="foot"><button class="linkbtn" data-dlg="about">About</button><button class="linkbtn" data-dlg="faq">FAQ</button><a href="mailto:a.ayala@fehrandpeers.com?subject=StreetFlow">Email me</a></footer></div>
       <section class="canvas" id="canvas" aria-label="Workspace"></section>
     </div>
   </div>
+  <dialog id="dlg-about" class="dlg"><h2>ABOUT STREETFLOW</h2>
+    <p>StreetFlow turns a street segment into a concept package: an existing cross-section, alternatives that fit between the existing curbs, renderings on a street photo, and an optional planning-level cost estimate.</p>
+    <p>It runs Fehr &amp; Peers street-concept tools as one guided flow. The drawings use the F&amp;P cross-section asset library; costs use 2025-26 regional bid prices. Outputs are planning-level concepts, not engineering designs.</p>
+    <p>Built by Adrian Ayala, AICP, Fehr &amp; Peers, Los Angeles.</p><form method="dialog"><button class="btn">Close</button></form></dialog>
+  <dialog id="dlg-faq" class="dlg"><h2>FAQ</h2>
+    <h3>Where does the existing street come from?</h3><p>OpenStreetMap, checked against the Street View photo. You confirm it and set the curb-to-curb width, which then stays fixed for every concept.</p>
+    <h3>Why do I mark the curbs?</h3><p>The renderings are placed from the two curb lines on the photo. A person approves them so the concepts land in the right place. AI can suggest them.</p>
+    <h3>What is in the standard package?</h3><p>The concept renderings sheet and the concept sections sheet, compiled into one PDF. A cost estimate (Excel or PDF) and an AI handoff ZIP are optional.</p>
+    <h3>Can I change a concept after building?</h3><p>Yes. Go back to Alternatives, edit, and build again. Mark-ups made in Review are saved with the set.</p>
+    <h3>How accurate are the costs?</h3><p>Planning level only: regional unit prices and typical quantities by delivery tier. They are not an engineer's estimate.</p>
+    <form method="dialog"><button class="btn">Close</button></form></dialog>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

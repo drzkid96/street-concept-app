@@ -80,3 +80,12 @@ go(location.hash.slice(1) || 'site');
 
 // Sidebar sections remember whether the person opened or closed them.
 document.addEventListener('click', e => { const sm = (e.target as HTMLElement).closest?.('details.task > summary'); const d = sm?.parentElement as HTMLDetailsElement | null; if (d?.dataset.key) (window as any).__taskOpen[d.dataset.key] = !d.open; }, true);
+
+// Restart (two clicks), About and FAQ
+const rs = document.getElementById('restart') as HTMLButtonElement;
+rs.addEventListener('click', () => {
+  if (!rs.dataset.arm) { rs.dataset.arm = '1'; rs.textContent = 'Click again to clear everything'; setTimeout(() => { delete rs.dataset.arm; rs.textContent = 'Restart'; }, 4000); return; }
+  try { Object.keys(localStorage).filter(k => k.startsWith('sca-project') || k.startsWith('curbguide:')).forEach(k => localStorage.removeItem(k)); } catch { /* ignore */ }
+  location.hash = '#site'; location.reload();
+});
+document.addEventListener('click', e => { const b = (e.target as HTMLElement).closest?.('[data-dlg]') as HTMLElement | null; if (b) (document.getElementById('dlg-' + b.dataset.dlg) as HTMLDialogElement).showModal(); });
