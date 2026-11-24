@@ -67,6 +67,7 @@ export interface Perspective {
   credit?: string;
   link?: string;
   heading?: number;
+  at?: [number, number];  // where the photo was taken (lng, lat), to catch a photo left over from another segment
   vp?: [number, number];  // vanishing point, fraction of image width/height
   cam?: { fov: number; h: number; xcam: number; horizon: number; cx: number }; // auto-scale camera
 }

@@ -22,14 +22,50 @@ function readImage(file: File, max = 1800): Promise<string> {
   });
 }
 
+/** Feet from a point to the segment path. */
+function offPath(pt: LngLat, path: LngLat[]): number {
+  const kx = 364000 * Math.cos(pt[1] * Math.PI / 180), ky = 364000;
+  const P = path.map(q => [(q[0] - pt[0]) * kx, (q[1] - pt[1]) * ky]);
+  let best = Infinity;
+  for (let i = 0; i < P.length; i++) {
+    const a = P[i], b = P[i + 1] ?? a, dx = b[0] - a[0], dy = b[1] - a[1], L2 = dx * dx + dy * dy;
+    const t = L2 ? Math.max(0, Math.min(1, -(a[0] * dx + a[1] * dy) / L2)) : 0;
+    best = Math.min(best, Math.hypot(a[0] + t * dx, a[1] + t * dy));
+  }
+  return best;
+}
+
+/** A Street View photo taken somewhere other than this segment (left over from an earlier one) is dropped, with its curbs. True when it was dropped. */
+export async function verifyPhoto(): Promise<boolean> {
+  const seg = project.seg(), p = seg.perspective, path = (seg.path ?? []) as LngLat[];
+  if (!p || p.source !== 'Google Street View' || path.length < 1) return false;
+  let at = p.at as LngLat | undefined;
+  try {
+    if (!at) {
+      const id = new URL(p.src).searchParams.get('pano'); if (!id) return false;
+      const maps = await loadMaps();
+      const ll = (await new maps.StreetViewService().getPanorama({ pano: id })).data.location.latLng;
+      at = [ll.lng(), ll.lat()];
+      project.update(() => { if (seg.perspective === p) p.at = at as [number, number]; });
+    }
+  } catch { return false; }
+  if (offPath(at, path) <= 500) return false;
+  project.update(() => { delete seg.perspective; delete seg.curbMarks; });
+  outputsStore.curbs = undefined; outputsStore.streetview = undefined;
+  return true;
+}
+
 let mode: 'idle' | 'sv' = 'idle';
+let dropped = false;
 export const photoStage: Stage = {
   id: 'photo', name: 'Photo',
   done: () => !!project.seg().perspective,
   render(side, canvas) {
     const gen = live.gen, seg = project.seg(), p = seg.perspective;
     const path = (seg.path ?? []) as LngLat[];
-    let pano: any = null, msgText = '';
+    let pano: any = null, msgText = dropped ? 'The earlier photo was taken on a different street, so it was removed. Choose a photo for this segment.' : '';
+    dropped = false;
+    if (p) verifyPhoto().then(gone => { if (gone && gen === live.gen) { dropped = true; repaintNav(); photoStage.render(side, canvas); } });
     const setPhoto = (ph: NonNullable<typeof p>) => {
       project.update(() => { seg.perspective = ph; delete seg.curbMarks; });
       outputsStore.curbs = undefined; outputsStore.streetview = undefined;   // new photo: curbs start over
@@ -61,7 +97,7 @@ export const photoStage: Stage = {
         const loc = pano.getLocation?.()?.latLng, h = ((pov.heading % 360) + 360) % 360;
         setPhoto({
           src: `https://maps.googleapis.com/maps/api/streetview?size=640x400&scale=2&pano=${id}&heading=${h.toFixed(1)}&pitch=${pov.pitch.toFixed(1)}&fov=${fov.toFixed(0)}&key=${GOOGLE_KEY}`,
-          source: 'Google Street View', credit: '© Google', heading: h,
+          source: 'Google Street View', credit: '© Google', heading: h, at: loc ? [loc.lng(), loc.lat()] : undefined,
           link: loc ? `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${loc.lat()},${loc.lng()}&heading=${h.toFixed(0)}` : undefined
         });
       });

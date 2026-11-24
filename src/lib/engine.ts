@@ -17,17 +17,26 @@ export const engine = {
     return !!this.health;
   },
   get on() { return !!this.health; },
+  /** One request to the engine. A 429 means Cloud Run did not hand the request to the engine at all (it is busy rendering), so it is safe to send again. */
+  async send(path: string, init?: RequestInit): Promise<Response> {
+    for (let i = 0; ; i++) {
+      const r = await fetch(this.url + path, init);
+      if (r.status === 429 && i < 5) { await new Promise(res => setTimeout(res, 2500 * (i + 1))); continue; }
+      if ((r.headers.get('content-type') || '').includes('text/html') && path.startsWith('/api/')) throw new Error('Your sign-in expired. Reload the page, then try again.');
+      return r;
+    }
+  },
   async json<T = any>(path: string, body: unknown): Promise<T> {
-    const r = await fetch(this.url + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const r = await this.send(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(typeof j.detail === 'string' ? j.detail : r.status >= 502 ? 'The engine was busy or restarting. Try again in a moment.' : `Engine error ${r.status}`);
+    if (!r.ok) throw new Error(typeof j.detail === 'string' ? j.detail : r.status === 429 || r.status >= 502 ? 'The engine was busy or restarting. Try again in a moment.' : `Engine error ${r.status}`);
     return j;
   },
-  async get<T = any>(path: string): Promise<T> { return (await fetch(this.url + path)).json(); },
+  async get<T = any>(path: string): Promise<T> { return (await this.send(path)).json(); },
   async form<T = any>(path: string, fd: FormData): Promise<T> {
-    const r = await fetch(this.url + path, { method: 'POST', body: fd });
+    const r = await this.send(path, { method: 'POST', body: fd });
     const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(j.detail || `Engine error ${r.status}`);
+    if (!r.ok) throw new Error(typeof j.detail === 'string' ? j.detail : r.status === 429 || r.status >= 502 ? 'The engine was busy or restarting. Try again in a moment.' : `Engine error ${r.status}`);
     return j;
   }
 };

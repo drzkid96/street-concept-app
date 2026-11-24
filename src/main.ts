@@ -4,6 +4,7 @@ import './styles/app.css';
 import { STAGES, live, type Stage } from './stages';
 import { project } from './lib/project';
 import { engine, onEngine } from './lib/engine';
+import { verifyPhoto } from './stages/photo';
 
 (window as any).__taskOpen = {};
 const nav = document.getElementById('stages')!;
@@ -77,6 +78,8 @@ engine.check();
 setInterval(() => engine.check(), 30000);
 
 go(location.hash.slice(1) || 'site');
+// a Street View photo left over from another segment is dropped before anything is built on it
+verifyPhoto().then(gone => { if (gone) go(current && ['site', 'existing', 'alts'].includes(current.id) ? current.id : 'photo'); });
 
 // Sidebar sections remember whether the person opened or closed them.
 document.addEventListener('click', e => { const sm = (e.target as HTMLElement).closest?.('details.task > summary'); const d = sm?.parentElement as HTMLDetailsElement | null; if (d?.dataset.key) (window as any).__taskOpen[d.dataset.key] = !d.open; }, true);
