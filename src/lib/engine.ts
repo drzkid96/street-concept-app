@@ -47,3 +47,5 @@ export const outputsStore: {
   cover?: { job: string; pdf: string; png: string };
   curbs?: { job: string; mode: 'manual' | 'ai'; guide: string; approved: boolean; status?: CurbStatus; photo: string };
 } = {};
+
+export const curbsOk = (g: { curbMarks?: { photo: string }; perspective?: { src: string } }) => !!g.curbMarks && !!g.perspective && g.curbMarks.photo === g.perspective.src;

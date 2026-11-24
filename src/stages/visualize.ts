@@ -3,7 +3,7 @@
 // state here and takes Approve / Accept / Clear commands, so the whole flow is driven from this sidebar.
 import { live, repaintNav, goTo, type Stage } from './index';
 import { project } from '../lib/project';
-import { engine, outputsStore, type CurbStatus } from '../lib/engine';
+import { engine, outputsStore, curbsOk, type CurbStatus } from '../lib/engine';
 import { settings, saveSettings, streetImage, bearing, type LngLat } from '../lib/providers';
 import { head, task, more, esc } from './ui';
 import type { Segment, Perspective } from '../lib/types';
@@ -31,7 +31,7 @@ let changing = false;
 
 export const visualizeStage: Stage = {
   id: 'visualize', name: 'Curbs',
-  done: () => !!outputsStore.curbs?.approved,
+  done: () => curbsOk(project.seg()),
   async render(side, canvas) {
     const gen = live.gen;
     if (!engine.on) { side.innerHTML = head(5, 'Curbs', 'Connecting to the engine…'); await engine.check(); if (gen !== live.gen) return; }
@@ -53,11 +53,11 @@ export const visualizeStage: Stage = {
     // ---------- sidebar
     const paint = () => {
       const keepOpen = (side.querySelector('details.more') as HTMLDetailsElement | null)?.open;
-      const c = cb(), st = c?.status, approved = !!c?.approved;
+      const c = cb(), st = c?.status, saved = curbsOk(seg), approved = !!c?.approved || saved;
       const s2 = !p ? 'later' : approved ? 'done' : 'now';
       side.innerHTML = `${head(5, 'Curbs', 'Mark both curb lines on the approved photo. The renderer places everything from them.')}
         ${p ? `<div class="mini"><img src="${esc(p.src)}" alt="Approved photo"><div><span class="note">${esc(p.source)}</span><br><a class="linkbtn" href="#photo">Change photo</a></div></div>` : ''}
-        ${task(1, 'Mark the curbs', s2, !p ? '<p class="note">Approve a photo first.</p>' : !c ? `
+        ${task(1, 'Mark the curbs', s2, !p ? '<p class="note">Approve a photo first.</p>' : !c && saved ? '<p class="okline">Curbs approved and saved with the project.</p><div class="row"><button class="btn ghost" id="edit">Mark the curbs again</button></div>' : !c ? `
           <p class="note">The renderer needs to know exactly where both curbs are. Choose how to start:</p>
           <fieldset class="choice">
             <label><input type="radio" name="cm" value="manual"${curbChoice === 'manual' ? ' checked' : ''}><span><b>I will mark them</b><small>Click along each curb on the photo. Most reliable.</small></span></label>
@@ -113,7 +113,7 @@ export const visualizeStage: Stage = {
     let starting = false;
     async function startCurbs(choice: 'manual' | 'ai') {
       if (!p || starting) return;
-      starting = true; curbChoice = choice;
+      starting = true; curbChoice = choice; project.update(() => { delete seg.curbMarks; }); repaintNav();
       msgText = choice === 'ai' ? 'Finding the curbs…' : 'Opening the photo…'; paint();
       try {
         const blob = await fetch(p.src).then(r => { if (!r.ok) throw new Error(`Photo ${r.status}`); return r.blob(); });
@@ -160,7 +160,7 @@ export const visualizeStage: Stage = {
       $('#undo')?.addEventListener('click', () => send({ cmd: 'undo' }));
       $('#clearai')?.addEventListener('click', () => send({ cmd: 'clear-ai' }));
       $('#approve')?.addEventListener('click', () => { say('Saving the curbs…'); send({ cmd: cb()?.mode === 'ai' ? 'accept-ai' : 'approve' }); });
-      $('#edit')?.addEventListener('click', () => { const c = cb(); if (!c) return; c.approved = false; outputsStore.streetview = undefined; msgText = ''; paint(); showCanvas(); repaintNav(); });
+      $('#edit')?.addEventListener('click', () => { const c = cb(); project.update(() => { delete seg.curbMarks; }); if (!c) { startCurbs('manual'); return; } c.approved = false; outputsStore.streetview = undefined; msgText = ''; paint(); showCanvas(); repaintNav(); });
       $('#restart')?.addEventListener('click', () => { outputsStore.curbs = undefined; outputsStore.streetview = undefined; startCurbs('manual'); });
       $('#src')?.addEventListener('change', e => { settings.street = (e.target as HTMLSelectElement).value as typeof settings.street; saveSettings(); const w = $('#mlyWrap'); if (w) w.hidden = settings.street !== 'mapillary'; });
       $('#mly')?.addEventListener('change', e => { settings.mapillaryToken = (e.target as HTMLInputElement).value.trim(); saveSettings(); });
@@ -172,12 +172,12 @@ export const visualizeStage: Stage = {
       const c = cb(), d = ev.data;
       if (!c || !d || d.job !== c.job) return;
       if (d.type === 'curbs-status') { const { type, job, ...s } = d; void type; void job; c.status = s as CurbStatus; if (!c.approved) paint(); }
-      else if (d.type === 'curbs-approved') { c.approved = true; repaintNav(); goTo('build'); }
+      else if (d.type === 'curbs-approved') { c.approved = true; project.update(() => { seg.curbMarks = { photo: p!.src, marks: d.marks, width: road }; }); repaintNav(); goTo('build'); }
       else if (d.type === 'curbs-error') { msgText = d.text; paint(); }
     };
     window.addEventListener('message', onMsg);
     visualizeStage.dispose = () => window.removeEventListener('message', onMsg);
     paint(); showCanvas();
-    if (p && !cb()) startCurbs('manual');   // marking opens right away; AI is one click in the panel
+    if (p && !cb() && !curbsOk(seg)) startCurbs('manual');   // marking opens right away; AI is one click in the panel
   }
 };

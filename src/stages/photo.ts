@@ -31,7 +31,7 @@ export const photoStage: Stage = {
     const path = (seg.path ?? []) as LngLat[];
     let pano: any = null, msgText = '';
     const setPhoto = (ph: NonNullable<typeof p>) => {
-      project.update(() => { seg.perspective = ph; });
+      project.update(() => { seg.perspective = ph; delete seg.curbMarks; });
       outputsStore.curbs = undefined; outputsStore.streetview = undefined;   // new photo: curbs start over
       mode = 'idle'; repaintNav(); goTo('visualize');   // approved: straight on to the curbs
     };

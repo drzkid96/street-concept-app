@@ -1,11 +1,12 @@
 // Build: every input is gathered in steps 1 to 5. Here the person picks the outputs and builds them in one run.
 import { live, repaintNav, goTo, type Stage } from './index';
 import { project } from '../lib/project';
-import { engine, outputsStore } from '../lib/engine';
+import { engine, outputsStore, curbsOk } from '../lib/engine';
 import { head, task, more, esc } from './ui';
 
 const want = { render: true, sections: true, cost: false, zip: false };
 let method = 'default';
+let renderJob = '';
 let costFmt: 'excel' | 'pdf' = 'excel';
 let building = false;
 const log: string[] = [];
@@ -22,7 +23,7 @@ export const buildStage: Stage = {
       [!!seg.existingChecked, 'Existing street confirmed', 'existing', 'Press Next on the Existing step.'],
       [seg.alternatives.some(a => a.enabled !== false), `${seg.alternatives.filter(a => a.enabled !== false).length || 'No'} alternative${seg.alternatives.filter(a => a.enabled !== false).length === 1 ? '' : 's'} switched on`, 'alts', 'Switch on at least one alternative.'],
       [!!seg.perspective, 'Photo approved', 'photo', 'Approve a photo.'],
-      [!!outputsStore.curbs?.approved, 'Curbs approved', 'visualize', 'Approve the curbs.']
+      [curbsOk(seg), 'Curbs approved', 'visualize', 'Approve the curbs.']
     ];
     const canRender = inputs[0][0] && inputs[2][0] && inputs[4][0];
     const canCost = inputs[0][0] && inputs[2][0];
@@ -89,7 +90,11 @@ export const buildStage: Stage = {
       if (want.render && canRender) {
         say('Concept renderings: solving the curbs, removing parked cars, placing FP assets, building the sheet. A few minutes…');
         try {
-          const c = outputsStore.curbs!;
+          // a fresh engine job from the saved photo and curb marks: works even after the engine restarted
+          const cm = seg.curbMarks!, blob = await fetch(cm.photo).then(x => { if (!x.ok) throw new Error('the photo could not be loaded'); return x.blob(); });
+          const fd = new FormData(); fd.append('photo', blob, 'photo.jpg'); fd.append('marks', cm.marks); fd.append('width', String(cm.width));
+          const c = await engine.form('/api/curbs/restore', fd) as { job: string };
+          renderJob = c.job;
           let r: any = await engine.json('/api/streetview/run', { job: c.job, project: pf, street: seg.limits.from || pf.project.name, looking: outputsStore.look, title: pf.project.name, setting: seg.setting }).catch(() => null);
           for (let i = 0; !r && i < 400; i++) {   // the request was cut off: the run continues on the engine
             await new Promise(res => setTimeout(res, 4000));
@@ -112,7 +117,7 @@ export const buildStage: Stage = {
       if (want.zip) {
         say('AI handoff ZIP: packing…');
         try {
-          const r = await engine.json('/api/handoff', { project: pf, jobs: { compiled: outputsStore.compiled?.job, sections: outputsStore.sections?.job, concepts: outputsStore.concepts?.job, curbs: outputsStore.curbs?.job, streetview: outputsStore.streetview?.job } });
+          const r = await engine.json('/api/handoff', { project: pf, jobs: { compiled: outputsStore.compiled?.job, sections: outputsStore.sections?.job, concepts: outputsStore.concepts?.job, curbs: renderJob || undefined, streetview: outputsStore.streetview?.job } });
           outputsStore.handoff = { zip: r.zip, name: r.name, bytes: r.bytes };
           log[log.length - 1] = `AI handoff ZIP: done (${Math.round(r.bytes / 1024 / 1024 * 10) / 10} MB).`;
         } catch (err) { log[log.length - 1] = 'AI handoff ZIP: stopped. ' + (err as Error).message; }
