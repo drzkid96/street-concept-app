@@ -138,7 +138,19 @@ export function conformTo(alt: Section, existing: Section) {
 // Fit a built roadway to the curb-to-curb width with the same priority rules (extra to bikeways, buffers,
 // parking up to their maximum, then shoulders; shortfall from shoulders, buffers and lanes above 10 ft).
 export function fitRoad(sec: Section, target: number) {
+  mergeBuffers(sec);
   const r = split(sec).road, cur = r.reduce((a, e) => a + e.width_ft, 0);
   if (Math.abs(target - cur) > 0.01) absorb(r, target - cur, null);
   settle(split(sec).road, target, sec);
+}
+
+// Adjacent bike buffers are one buffer (posts win over paint).
+export function mergeBuffers(sec: Section) {
+  const out: SectionElement[] = [];
+  for (const e of sec.elements) {
+    const a = out[out.length - 1];
+    if (a && a.type === 'bike_buffer' && e.type === 'bike_buffer') { a.width_ft += e.width_ft; if (e.material === 'posts') a.material = 'posts'; a.lineRight = e.lineRight; }
+    else out.push(e);
+  }
+  sec.elements = out;
 }

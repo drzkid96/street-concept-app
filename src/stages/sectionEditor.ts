@@ -1,6 +1,6 @@
 import type { Section, ElementType, Direction } from '../lib/types';
 import { ELEMENTS, MATERIALS, materialOf } from '../lib/standards';
-import { split, curbToCurb, roadsideLabel, setWidth, addElement, removeElement, setCurbToCurb, limitsFor } from '../lib/roadway';
+import { split, curbToCurb, roadsideLabel, setWidth, addElement, removeElement, setCurbToCurb, limitsFor, mergeBuffers } from '../lib/roadway';
 
 const ROAD_TYPES = (Object.keys(ELEMENTS) as ElementType[]).filter(t => !['sidewalk', 'parkway', 'curb'].includes(t));
 const DIRS: Direction[] = ['none', 'inbound', 'outbound', 'both'];
@@ -37,7 +37,7 @@ export function sectionEditor(host: HTMLElement, sec: Section, onChange: () => v
       <p class="note" role="status">${note}</p>
       <p class="note roadside">Outside the curbs, unchanged: left ${roadsideLabel(left)}; right ${roadsideLabel(right)}.</p>`;
   };
-  const act = (f: () => string) => { try { note = f(); } catch (err) { note = (err as Error).message; } render(); onChange(); };
+  const act = (f: () => string) => { try { note = f(); mergeBuffers(sec); } catch (err) { note = (err as Error).message; } render(); onChange(); };
   host.addEventListener('change', e => {
     const t = e.target as HTMLInputElement | HTMLSelectElement;
     if (t.id === 'c2c') { act(() => { setCurbToCurb(sec, parseFloat(t.value)); return 'Roadway scaled to the curb-to-curb width.'; }); return; }
