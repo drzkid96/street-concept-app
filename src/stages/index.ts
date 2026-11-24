@@ -50,13 +50,14 @@ const existing: Stage = {
       ${r.flags.length ? `<ul class="flags">${r.flags.map(f => `<li>${esc(f)}</li>`).join('')}</ul>` : '<p class="okline">No conflicts between OpenStreetMap and the photo.</p>'}
       <div class="row"><button class="linkbtn" id="again">Fill again</button></div>`;
     side.innerHTML = `${head(2, 'Existing street', 'The street as it is today. Filled in for you from OpenStreetMap, checked against the Street View photo.')}
-      ${task(1, 'Filled automatically', !has ? 'later' : stale ? 'now' : 'done', !has ? '<p class="note">Mark the segment in <a href="#site">Site</a> first.</p>' : stale ? '<p class="note" id="prog">Starting…</p>' : a ? sources(a) : '<p class="note">You entered and confirmed this section yourself.</p><div class="row"><button class="linkbtn" id="again">Fill again from OpenStreetMap and the photo</button></div>')}
-      ${task(2, 'Check it and fix anything wrong', seg.existingChecked ? 'done' : stale ? 'later' : 'now', `
-        <p class="note">Only the roadway between the curbs is edited. OpenStreetMap rarely has widths or parking: fix anything that does not match the street, then confirm.</p>
-        <div class="field"><label for="scene">Frontage type</label><select id="scene">${SCENES.map(([v, l]) => `<option value="${v}"${v === (seg.setting || DEFAULT_SCENE) ? ' selected' : ''}>${l}</option>`).join('')}</select>
-          <span class="note">${a?.sceneWhy ? `Picked from ${esc(a.sceneWhy)}. ` : ''}Sidewalks follow the frontage.</span></div>
+      ${task(1, 'Filled automatically', !has ? 'later' : stale ? 'now' : 'done', !has ? '<p class="note">Mark the segment in <a href="#site">Site</a> first.</p>' : stale ? '<p class="note" id="prog">Starting…</p>' : a ? sources(a) : '<p class="note">You entered and confirmed this section yourself.</p><div class="row"><button class="linkbtn" id="again">Fill again from OpenStreetMap and the photo</button></div>', '', !stale && a ? `${a.osm.street}${a.flags.length ? ` · ${a.flags.length} to check` : ''}` : '')}
+      ${task(2, 'Set the curb-to-curb width and lanes', stale ? 'later' : 'now', `
+        
+
 
         <div id="ed"></div>
+        <div class="field"><label for="scene">Frontage type</label><select id="scene">${SCENES.map(([v, l]) => `<option value="${v}"${v === (seg.setting || DEFAULT_SCENE) ? ' selected' : ''}>${l}</option>`).join('')}</select>
+          <span class="note">${a?.sceneWhy ? `Picked from ${esc(a.sceneWhy)}. ` : ''}Sidewalks follow the frontage.</span></div>
 <p class="note">When it matches the street, press <b>Next</b>.</p>`)}`;
     if (!stale && seg.settingPinned && a && a.scene !== seg.setting) project.update(() => { applyFrontage(seg.existing, seg.setting, a.sidewalks); a.scene = seg.setting!; a.sceneWhy = 'your choice in Site'; seg.alternatives.forEach(x => conformTo(x.section, seg.existing)); });
     canvas.innerHTML = '<div class="ex-split"><div id="aer"></div><div id="secHost"></div></div>';
@@ -98,10 +99,10 @@ const alts: Stage = {
     side.innerHTML = `${head(3, 'Alternatives', 'Three bikeway concepts are ready by default, each fitted inside the existing curbs. Edit them, switch any off, or add your own.')}
       <ul class="altlist">${seg.alternatives.map((x, i) => `<li class="${i === altIdx ? 'cur' : ''}${x.enabled === false ? ' off' : ''}"><input type="checkbox" data-on="${i}" aria-label="Include ${esc(x.name)} in the outputs"${x.enabled === false ? '' : ' checked'}><button class="linkbtn" data-i="${i}">${String.fromCharCode(65 + i)}. ${esc(x.name)}</button></li>`).join('')}</ul>
       <div class="row"><button class="chip add" id="dup">+ New from existing</button><button class="chip add" id="defaults">Reset to the three default concepts</button></div>
-      <p class="note">Ticked concepts go into the outputs.</p>
-      ${a ? `<div class="field"><label for="nm">Name</label><input id="nm" value="${esc(a.name)}"></div>
-      <div class="field"><label for="tier">Delivery</label><select id="tier"><option value="quick-build">Quick-build (paint and posts)</option><option value="interim">Interim</option><option value="capital">Capital (concrete)</option></select></div>
-      <p class="note">Change the roadway between the curbs. The curbs and everything outside them stay as they are today.</p>
+      
+      ${a ? `<div class="two"><div class="field"><label for="nm">Name</label><input id="nm" value="${esc(a.name)}"></div>
+      <div class="field"><label for="tier">Delivery</label><select id="tier"><option value="quick-build">Quick-build (paint and posts)</option><option value="interim">Interim</option><option value="capital">Capital (concrete)</option></select></div></div>
+      
       <div id="ed"></div>
       <div class="row"><button class="btn ghost danger" id="del">Delete this alternative</button></div>` : '<p class="note">No alternatives yet. Press <b>+ New alternative</b> to start from the existing street.</p>'}`;
     side.querySelector('#dup')!.addEventListener('click', () => {

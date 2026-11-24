@@ -12,11 +12,13 @@ export const sheetsStage: Stage = {
   async render(side, canvas) {
     const gen = live.gen, seg = project.seg();
     if (await engine.check()) {
-      const list = [...(outputsStore.concepts ? [{ name: 'Concepts and cost one-pager', url: outputsStore.concepts.pdf }] : []),
-        ...(outputsStore.streetview?.pdfs ?? []).map(f => ({ name: `Concept renderings sheet (${f.name})`, url: f.url }))];
+      const parts = [...(outputsStore.streetview?.pdfs ?? []).map(f => ({ name: 'Concept renderings sheet', url: f.url })), ...(outputsStore.sections ? [{ name: 'Concept sections sheet', url: outputsStore.sections.pdf }] : []),
+        ...(outputsStore.concepts ? [{ name: 'Cost estimate', url: outputsStore.concepts.pdf }] : [])];
+      const list = [...(outputsStore.compiled ? [{ name: `Compiled PDF set (${outputsStore.compiled.pages} pages)`, url: outputsStore.compiled.pdf }] : []), ...parts];
+      let shown0 = 0;
       if (gen !== live.gen) return;
       const pf = project.get();
-      let shown = list.length - 1;
+      let shown = shown0;
       side.innerHTML = `${head(7, 'Review', 'Every output from the build. Read them, then mark them up for revisions or approve them.')}
         ${task(1, 'Read the outputs', list.length ? 'now' : 'later', list.length ? `<ul class="filelist">${list.map((f, i) => `<li><button class="linkbtn" data-i="${i}">${esc(f.name)}</button><a class="note" target="_blank" rel="noopener" href="${engine.abs(f.url)}">open in new tab</a></li>`).join('')}</ul>` :
           `<p class="note">Nothing built yet. Go to <a href="#build">Build</a>.</p>`)}
@@ -30,7 +32,7 @@ export const sheetsStage: Stage = {
       side.querySelector('#open')!.addEventListener('click', async () => {
         side.querySelector('#msg')!.textContent = 'Opening the markup viewer…';
         try {
-          const fd = new FormData(); fd.append('title', pf.project.name || 'Street concepts'); fd.append('rev', String(1 + pf.review.filter(r => r.kind === 'approved').length)); fd.append('urls', JSON.stringify(list.map(f => f.url)));
+          const fd = new FormData(); fd.append('title', pf.project.name || 'Street concepts'); fd.append('rev', String(1 + pf.review.filter(r => r.kind === 'approved').length)); fd.append('urls', JSON.stringify(parts.map(f => f.url)));
           const r = await engine.form('/api/review', fd);
           if (gen !== live.gen) return;
           canvas.innerHTML = `<iframe class="guide" title="Markup viewer" src="${engine.abs(r.page)}"></iframe>`;

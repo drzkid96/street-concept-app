@@ -5,6 +5,7 @@ import { STAGES, live, type Stage } from './stages';
 import { project } from './lib/project';
 import { engine, onEngine } from './lib/engine';
 
+(window as any).__taskOpen = {};
 const nav = document.getElementById('stages')!;
 let side = document.getElementById('side')!;
 let canvas = document.getElementById('canvas')!;
@@ -54,7 +55,7 @@ name.addEventListener('change', () => project.update(p => { p.project.name = nam
 
 // Full address of the segment, top right
 const addr = document.getElementById('addr')!;
-const paintAddr = () => { const g = project.seg(); const where = [g.limits.from, g.city].filter(Boolean).join(', '); addr.hidden = !where; addr.innerHTML = where ? `${g.keymap ? `<img src="${g.keymap}" alt="Key map">` : ''}<div><span class="lbl">LOCATION</span><b>${where}</b>${g.address ? `<span>${g.address}</span>` : ''}</div>` : ''; };
+const paintAddr = () => { const g = project.seg(); const where = [g.limits.from, g.city].filter(Boolean).join(', '); addr.hidden = !where; addr.innerHTML = where ? `${g.keymap ? `<img src="${g.keymap}" alt="Key map">` : ''}<div><b>${where}</b>${g.address ? `<span>${g.address}</span>` : ''}</div>` : ''; };
 (window as any).__paintAddr = paintAddr; paintAddr();
 const pill = document.getElementById('eng')!;
 const paint = () => {
@@ -76,3 +77,6 @@ engine.check();
 setInterval(() => engine.check(), 30000);
 
 go(location.hash.slice(1) || 'site');
+
+// Sidebar sections remember whether the person opened or closed them.
+document.addEventListener('click', e => { const sm = (e.target as HTMLElement).closest?.('details.task > summary'); const d = sm?.parentElement as HTMLDetailsElement | null; if (d?.dataset.key) (window as any).__taskOpen[d.dataset.key] = !d.open; }, true);

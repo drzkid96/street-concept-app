@@ -10,15 +10,15 @@ const DIR_LABEL: Record<Direction, string> = { none: '–', inbound: 'In', outbo
 
 // Roadway editor: only the elements between the curbs. Curb to curb is fixed (Existing may set the measured value).
 export function sectionEditor(host: HTMLElement, sec: Section, onChange: () => void, opts: { existing: boolean }) {
-  let note = '';
+  let note = '', lines = false;
   const render = () => {
     const { left, road, right } = split(sec), c2c = curbToCurb(sec);
     host.innerHTML = `
       <div class="c2c">${opts.existing
-        ? `<label for="c2c">Curb to curb</label><span><input id="c2c" type="number" min="10" max="200" step="0.5" value="${c2c}"> ft</span>`
+        ? `<label for="c2c">Curb to curb</label><span><input id="c2c" type="number" min="10" max="200" step="0.5" value="${c2c}"> ft</span><span class="note">Measure it on the aerial. This width is locked for every concept after this step.</span>`
         : `<span class="lbl">Curb to curb</span><b>${c2c} ft</b><span class="note">fixed by the existing street</span>`}</div>
-      <table class="sec-table"><colgroup><col style="width:46%"><col style="width:22%"><col style="width:20%"><col style="width:12%"></colgroup>
-        <thead><tr><th>Roadway, left curb to right curb</th><th class="num">Width (ft)</th><th>Dir</th><th></th></tr></thead>
+      <table class="sec-table${lines ? '' : ' lines-off'}"><colgroup><col style="width:46%"><col style="width:22%"><col style="width:20%"><col style="width:12%"></colgroup>
+        <thead><tr><th>Roadway, left to right</th><th class="num">Width (ft)</th><th>Dir</th><th></th></tr></thead>
         <tbody>${road.map((e, i) => {
           const L = limitsFor(road, e);
           const hint = L.pref && (e.width_ft < L.pref[0] || e.width_ft > L.pref[1]) ? `<span class="badge warn">${L.label}: preferred ${L.pref[0]}${L.pref[1] !== L.pref[0] ? '–' + L.pref[1] : ''} ft</span>` : '';
@@ -32,6 +32,7 @@ export function sectionEditor(host: HTMLElement, sec: Section, onChange: () => v
           </tr>${lineSel(i, 'R', e.lineRight, i === road.length - 1 ? 'Line at right curb' : 'Line between')}`;
         }).join('')}</tbody>
       </table>
+      <label class="check-row" style="margin:.3rem 0;font-weight:400;font-size:.82rem"><input type="checkbox" id="showLines"${lines ? ' checked' : ''}> Edit line types between elements</label>
       <div class="row addrow"><select id="addT" class="sel" aria-label="Element to add">${ROAD_TYPES.map(t => `<option value="${t}"${t === 'bike_lane' ? ' selected' : ''}>${ELEMENTS[t].label}</option>`).join('')}</select>
         <button class="btn ghost" data-act="add" data-where="left">Add at left curb</button><button class="btn ghost" data-act="add" data-where="right">Add at right curb</button></div>
       <p class="note" role="status">${note}</p>
@@ -40,6 +41,7 @@ export function sectionEditor(host: HTMLElement, sec: Section, onChange: () => v
   const act = (f: () => string) => { try { note = f(); mergeBuffers(sec); } catch (err) { note = (err as Error).message; } render(); onChange(); };
   host.addEventListener('change', e => {
     const t = e.target as HTMLInputElement | HTMLSelectElement;
+    if (t.id === 'showLines') { lines = (t as HTMLInputElement).checked; render(); return; }
     if (t.id === 'c2c') { act(() => { setCurbToCurb(sec, parseFloat(t.value)); return 'Roadway scaled to the curb-to-curb width.'; }); return; }
     const tr = t.closest('tr[data-i]') as HTMLElement | null;
     if (!tr) return;

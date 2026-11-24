@@ -40,6 +40,8 @@ export const outputsStore: {
   concepts?: { job: string; pdf: string; png?: string; summary: string[] };
   streetview?: { job: string; pdfs: EngineFile[]; renders: EngineFile[] };
   look?: string;
+  sections?: { job: string; pdf: string };
+  compiled?: { job: string; pdf: string; pages: number };
   handoff?: { zip: string; name: string; bytes: number };
   cover?: { job: string; pdf: string; png: string };
   curbs?: { job: string; mode: 'manual' | 'ai'; guide: string; approved: boolean; status?: CurbStatus; photo: string };
