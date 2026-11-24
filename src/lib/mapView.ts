@@ -46,7 +46,7 @@ export class MapView {
 
   private drawOverlay() {
     const m = this.map;
-    if (!m.isStyleLoaded()) return;
+    if (!m.isStyleLoaded()) { m.once('idle', () => this.drawOverlay()); return; }
     const line = { type: 'Feature' as const, properties: {}, geometry: { type: 'LineString' as const, coordinates: this.path } };
     const pts = { type: 'FeatureCollection' as const, features: this.path.map((c, i) => ({ type: 'Feature' as const, properties: { i }, geometry: { type: 'Point' as const, coordinates: c } })) };
     const src = m.getSource(OVERLAY.line) as maplibregl.GeoJSONSource | undefined;

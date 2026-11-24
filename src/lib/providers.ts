@@ -80,11 +80,19 @@ export async function snap(path: LngLat[]): Promise<LngLat[]> {
     return (j.snappedPoints || []).map((s: any) => [s.location.longitude, s.location.latitude] as LngLat);
   }
   // OSRM public demo server (fair use). Uses route through the points, which follows the street network.
-  const coords = path.map(([x, y]) => `${x.toFixed(6)},${y.toFixed(6)}`).join(';');
-  const r = await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`);
-  const j = await r.json();
-  if (j.code !== 'Ok') throw new Error(`OSRM: ${j.message || j.code}`);
-  return j.routes[0].geometry.coordinates as LngLat[];
+  // The demo server routes cars, so it obeys one-way streets. If the clicks run against the
+  // one-way direction the route detours around the block: retry in reverse and keep the user's order.
+  const route = async (pts: LngLat[]) => {
+    const coords = pts.map(([x, y]) => `${x.toFixed(6)},${y.toFixed(6)}`).join(';');
+    const j = await (await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`)).json();
+    if (j.code !== 'Ok') throw new Error(`OSRM: ${j.message || j.code}`);
+    return j.routes[0].geometry.coordinates as LngLat[];
+  };
+  const direct = lengthFt(path);
+  const fwd = await route(path);
+  if (lengthFt(fwd) <= direct * 1.3 + 50) return fwd;
+  const rev = (await route([...path].reverse())).reverse();
+  return lengthFt(rev) < lengthFt(fwd) ? rev : fwd;
 }
 
 // ---------- elevation (USGS 3DEP, open) ----------
@@ -121,6 +129,7 @@ export async function streetImage(at: LngLat, heading: number): Promise<StreetIm
   const [x, y] = at;
   if (settings.street === 'google') {
     const meta = await fetch(`https://maps.googleapis.com/maps/api/streetview/metadata?location=${y},${x}&source=outdoor&key=${GOOGLE_KEY}`).then(r => r.json()).catch(() => null);
+    if (meta?.status === 'REQUEST_DENIED') throw new Error(`Google refused the key from this site (${location.host}). Add it to the key's website restrictions.`);
     if (meta && meta.status && meta.status !== 'OK') return null;
     const loc = meta?.pano_id ? `pano=${meta.pano_id}` : `location=${y},${x}`;
     return {
