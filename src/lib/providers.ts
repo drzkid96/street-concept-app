@@ -5,11 +5,11 @@ export type LngLat = [number, number];
 
 // ---------- settings (remembered per browser) ----------
 export interface Settings {
-  basemap: string; geocoder: 'nominatim' | 'google'; snap: 'osrm' | 'google';
+  basemap: string; geocoder: 'auto' | 'nominatim' | 'google'; snap: 'osrm' | 'google';
   street: 'google' | 'panoramax' | 'mapillary'; mapillaryToken: string;
 }
 const SKEY = 'sca-settings-v1';
-const DEFAULTS: Settings = { basemap: 'osm-liberty', geocoder: 'nominatim', snap: 'osrm', street: 'google', mapillaryToken: '' };
+const DEFAULTS: Settings = { basemap: 'osm-liberty', geocoder: 'auto', snap: 'osrm', street: 'google', mapillaryToken: '' };
 export const settings: Settings = (() => {
   try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(SKEY) || '{}') }; } catch { return { ...DEFAULTS }; }
 })();
@@ -40,9 +40,17 @@ export async function googleTileUrl(): Promise<string> {
 }
 
 // ---------- geocoding ----------
-export interface Place { label: string; at: LngLat }
+export interface Place { label: string; at: LngLat; by: string }
 export async function geocode(q: string): Promise<Place[]> {
-  if (settings.geocoder === 'google') {
+  if (settings.geocoder === 'auto') {
+    // Open first; Google only when OpenStreetMap finds nothing (e.g. intersections).
+    const open = await nominatim(q).catch(() => [] as Place[]);
+    return open.length ? open : google(q);
+  }
+  return settings.geocoder === 'google' ? google(q) : nominatim(q);
+}
+async function google(q: string): Promise<Place[]> {
+  {
     const r = await fetch('https://places.googleapis.com/v1/places:searchText', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': GOOGLE_KEY, 'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.location' },
@@ -50,14 +58,16 @@ export async function geocode(q: string): Promise<Place[]> {
     });
     if (!r.ok) throw new Error(`Google Places error ${r.status}`);
     const j = await r.json();
-    return (j.places || []).map((p: any) => ({ label: p.formattedAddress || p.displayName?.text, at: [p.location.longitude, p.location.latitude] as LngLat }));
+    return (j.places || []).map((p: any) => ({ label: p.formattedAddress || p.displayName?.text, at: [p.location.longitude, p.location.latitude] as LngLat, by: 'Google Places' }));
   }
+}
+async function nominatim(q: string): Promise<Place[]> {
   // Nominatim: 1 request/second max, no autocomplete (OSMF usage policy). Search runs on submit only.
   const u = new URL('https://nominatim.openstreetmap.org/search');
   u.search = new URLSearchParams({ q, format: 'jsonv2', limit: '6', countrycodes: 'us', viewbox: '-120.7,35.8,-114.1,32.5', bounded: '0' }).toString();
   const r = await fetch(u);
   if (!r.ok) throw new Error(`Nominatim error ${r.status}`);
-  return (await r.json()).map((p: any) => ({ label: p.display_name, at: [+p.lon, +p.lat] as LngLat }));
+  return (await r.json()).map((p: any) => ({ label: p.display_name, at: [+p.lon, +p.lat] as LngLat, by: 'OpenStreetMap (Nominatim)' }));
 }
 
 // ---------- snap to roads ----------
@@ -122,7 +132,8 @@ export async function streetImage(at: LngLat, heading: number): Promise<StreetIm
   }
   const d = 0.0012;
   if (settings.street === 'panoramax') {
-    const r = await fetch(`https://api.panoramax.xyz/api/search?bbox=${x - d},${y - d},${x + d},${y + d}&limit=20`);
+    const e = 0.004; // ~400 m: open coverage is sparser
+    const r = await fetch(`https://api.panoramax.xyz/api/search?bbox=${x - e},${y - e},${x + e},${y + e}&limit=50`);
     const j = await r.json();
     const f = nearest(j.features || [], at, (f: any) => f.geometry.coordinates);
     if (!f) return null;

@@ -13,7 +13,7 @@ export const siteStage: Stage = {
     side.innerHTML = `<h2>1. SITE</h2>
       <form id="sf" class="field"><label for="q">Search address or intersection</label>
         <div class="row" style="margin:0"><input id="q" placeholder="Sunset Blvd and Vermont Ave" style="flex:1 1 180px">
-        <select id="geo" class="sel" style="flex:0 1 150px" aria-label="Search provider">${opt('nominatim', 'OpenStreetMap', settings.geocoder)}${opt('google', 'Google Places', settings.geocoder)}</select>
+        <select id="geo" class="sel" style="flex:0 1 150px" aria-label="Search provider">${opt('auto', 'Auto (open first)', settings.geocoder)}${opt('nominatim', 'OpenStreetMap', settings.geocoder)}${opt('google', 'Google Places', settings.geocoder)}</select>
         <button class="btn">Search</button></div></form>
       <ul id="res" class="results"></ul>
       <div class="field"><label for="bm">Basemap</label><select id="bm">${BASEMAPS.map(b => opt(b.id, b.label, settings.basemap)).join('')}</select></div>
@@ -82,7 +82,7 @@ export const siteStage: Stage = {
         $('#res').innerHTML = res.map((r, i) => `<li><button type="button" data-i="${i}">${esc(r.label)}</button></li>`).join('') || '<li class="note">No results</li>';
         $('#res').onclick = ev => { const b = (ev.target as HTMLElement).closest('button[data-i]') as HTMLElement | null; if (b) mv.flyTo(res[+b.dataset.i!].at); };
         if (res[0]) mv.flyTo(res[0].at);
-        msg(settings.geocoder === 'nominatim' ? 'Search © OpenStreetMap contributors (Nominatim)' : 'Search by Google Places');
+        msg(res[0] ? `Search by ${res[0].by}${res[0].by.startsWith('Open') ? ' © OpenStreetMap contributors' : ''}` : 'No results from any source');
       } catch (err) { msg(String((err as Error).message)); }
     });
     $('#snap').addEventListener('click', async () => {
