@@ -21,7 +21,6 @@ export const BASEMAPS: Basemap[] = [
   { id: 'osm-liberty', label: 'Streets (OpenFreeMap)', kind: 'style', url: 'https://tiles.openfreemap.org/styles/liberty', open: true },
   { id: 'osm-positron', label: 'Light (OpenFreeMap)', kind: 'style', url: 'https://tiles.openfreemap.org/styles/positron', open: true },
   { id: 'usgs-imagery', label: 'Aerial, NAIP (USGS)', kind: 'raster', url: 'https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}', attribution: 'USGS The National Map: Orthoimagery', open: true, maxzoom: 16 },
-  { id: 'usgs-imagery-topo', label: 'Aerial + labels (USGS)', kind: 'raster', url: 'https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryTopo/MapServer/tile/{z}/{y}/{x}', attribution: 'USGS The National Map', open: true, maxzoom: 16 },
   { id: 'google-satellite', label: 'Aerial, high-res (Google)', kind: 'google', open: false, maxzoom: 22 }
 ];
 

@@ -6,7 +6,7 @@ import { LA } from './config';
 const OVERLAY = { line: 'seg-line', pts: 'seg-pts' };
 
 async function styleFor(id: string): Promise<string | maplibregl.StyleSpecification> {
-  const b = BASEMAPS.find(x => x.id === id) ?? BASEMAPS[0];
+  const b = BASEMAPS.find(x => x.id === id) ?? BASEMAPS[0]; // unknown or retired ids fall back to streets
   if (b.kind === 'style') return b.url!;
   const tiles = b.kind === 'google' ? await googleTileUrl() : b.url!;
   return {
