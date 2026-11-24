@@ -62,7 +62,7 @@ export function build(cls: string, t: Tags): { section: Section; notes: string[]
     if (s.sidewalk) a.push({ type: 'sidewalk', width_ft: swW, direction: 'none' });
     if (s.bike === 'track') a.push({ type: 'separated_bikeway', width_ft: 6, direction: dir, material: 'posts' });
     if (s.parking) a.push({ type: 'parking', width_ft: 8, direction: dir });
-    if (s.bike === 'lane') a.push({ type: 'bike_lane', width_ft: 5, direction: dir, material: 'green' });
+    if (s.bike === 'lane') a.push({ type: 'bike_lane', width_ft: 6, direction: dir, material: 'green' });
     return outer ? a : a.reverse();
   };
   // left side of the section = inbound (backward) side

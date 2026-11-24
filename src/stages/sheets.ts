@@ -20,6 +20,7 @@ export const sheetsStage: Stage = {
       side.innerHTML = `${head(6, 'Review', 'Every output from the build. Read them, then mark them up for revisions or approve them.')}
         ${task(1, 'Read the outputs', list.length ? 'now' : 'later', list.length ? `<ul class="filelist">${list.map((f, i) => `<li><button class="linkbtn" data-i="${i}">${esc(f.name)}</button><a class="note" target="_blank" rel="noopener" href="${engine.abs(f.url)}">open in new tab</a></li>`).join('')}</ul>` :
           `<p class="note">Nothing built yet. Go to <a href="#build">Build</a>.</p>`)}
+        ${outputsStore.handoff ? `<p class="row"><a class="btn ghost" href="${engine.abs(outputsStore.handoff.zip)}" download="${esc(outputsStore.handoff.name)}">Download AI handoff ZIP</a></p>` : ''}
         ${task(2, 'Mark up or approve', list.length ? 'now' : 'later', `
           <p class="note">Opens the markup viewer on every sheet: draw callouts, clouds and boxes, then press <b>Send</b> for revisions, or <b>Approved</b>.</p>
           <div class="row"><button class="btn" id="open"${list.length ? '' : ' disabled'}>Open markup viewer</button></div>`)}
