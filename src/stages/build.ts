@@ -14,16 +14,19 @@ const log: string[] = [];
 
 // Progress of a build: each output is a task with an expected duration (learned from the last run on this browser),
 // and the rendering reports its own steps, so the bar and the time left stay honest while it runs.
-type PTask = { key: string; label: string; est: number; t0?: number; t1?: number; floor?: number; sub?: string };
+type PTask = { key: string; label: string; est: number; t0?: number; t1?: number; lo?: number; hi?: number; sub?: string; n?: number };
 const prog: { tasks: PTask[]; timer?: number } = { tasks: [] };
 const EST_KEY = 'sca-build-secs';
 const DEFAULT_EST: Record<string, number> = { existing: 12, sections: 15, cost: 8, 'render-lo': 150, 'render-hi': 420, compile: 5, zip: 10 };
 const learned = (): Record<string, number> => { try { return JSON.parse(localStorage.getItem(EST_KEY) || '{}'); } catch { return {}; } };
 const estOf = (k: string) => learned()[k] ?? DEFAULT_EST[k] ?? 10;
 const learn = (k: string, secs: number) => { try { const l = learned(); l[k] = Math.round(l[k] ? 0.5 * l[k] + 0.5 * secs : secs); localStorage.setItem(EST_KEY, JSON.stringify(l)); } catch { /* ignore */ } };
-// share of a rendering run finished when each of its steps starts
-const RENDER_AT: Record<string, number> = { assist: 0, prep: 0.03, calibrate: 0.3, render: 0.48, sections: 0.86, sheet: 0.93 };
-const RENDER_SAY: Record<string, string> = { assist: 'solving the curbs', prep: 'clearing the roadway in the photo', calibrate: 'fitting the camera', render: 'drawing the concepts', sections: 'drawing the sections', sheet: 'laying out the sheets' };
+// A rendering run, measured: a short setup, then the first concept (reading the vehicles, clearing the roadway, drawing) takes
+// about 4.7 times as long as each concept after it. Shares of the whole run at each point the engine reports:
+const R_SETUP = 0.12, R_VEH = 1.1, R_FIRST = 4.7, R_TAIL = 0.08;
+const rWhole = (n: number) => R_SETUP + R_FIRST + Math.max(0, n - 1) + R_TAIL;
+const rAt = (n: number, veh: number, pics: number) => (pics > 0 ? R_SETUP + R_FIRST + (pics - 1) : veh > 0 ? R_SETUP + R_VEH : 0) / rWhole(n);
+const rNext = (n: number, veh: number, pics: number) => (pics > 0 ? R_SETUP + R_FIRST + pics : veh > 0 ? R_SETUP + R_FIRST : R_SETUP + R_VEH) / rWhole(n);
 function progView(): { pct: number; text: string; now: string } {
   const now = Date.now(); let done = 0, total = 0, left = 0, cur: PTask | undefined, over = false;
   for (const t of prog.tasks) {
@@ -33,7 +36,7 @@ function progView(): { pct: number; text: string; now: string } {
       cur = t;
       const el = (now - t.t0) / 1000;
       let f = Math.min(el / t.est, 0.97);
-      if (t.floor != null) f = Math.max(f, Math.min(t.floor + 0.02, 0.97));
+      if (t.lo != null) f = Math.max(t.lo, Math.min(f, (t.hi ?? 0.97) - 0.01, 0.97));   // never ahead of, or behind, what the engine has reported
       if (el > t.est) over = true;
       done += t.est * f; left += t.est * (1 - f);
     } else left += t.est;
@@ -113,7 +116,9 @@ export const buildStage: Stage = {
       try { if (want.render && canRender && seg.curbMarks) { const bm = await createImageBitmap(await fetch(seg.curbMarks.photo).then(x => x.blob())); hi = bm.width * bm.height > 600000; } } catch { /* estimate only */ }
       const rk = hi ? 'render-hi' : 'render-lo';
       const plan: [boolean, string, string][] = [[want.existing, 'existing', 'Existing conditions report'], [want.sections && canCost, 'sections', 'Sections sheet'], [want.cost && canCost, 'cost', 'Cost estimate'], [want.render && canRender, rk, 'Renderings'], [true, 'compile', 'Compiling the PDF set'], [want.zip, 'zip', 'Handoff ZIP']];
-      prog.tasks = plan.filter(x => x[0]).map(([, key, label]) => ({ key, label, est: estOf(key) }));
+      const nAlt = Math.max(1, pf.segments[0].alternatives.length);
+      const unit = learned()[rk + '-unit'] ?? (learned()[rk] ? learned()[rk] / rWhole(3) : (hi ? 62 : 22));   // seconds per concept after the first
+      prog.tasks = plan.filter(x => x[0]).map(([, key, label]) => ({ key, label, est: key === rk ? unit * rWhole(nAlt) : estOf(key), n: key === rk ? nAlt : undefined }));
       window.clearInterval(prog.timer); prog.timer = window.setInterval(progTick, 500);
       let curKey = '';
       const say = (t: string) => {
@@ -171,18 +176,24 @@ export const buildStage: Stage = {
           const c = await engine.form('/api/curbs/restore', fd) as { job: string };
           renderJob = c.job;
           let r: any, settled = false;
-          const runP = engine.json('/api/streetview/run', { job: c.job, project: pf, street: seg.limits.from || pf.project.name, looking: outputsStore.look, title: pf.project.name, setting: seg.setting }).catch(() => null).then(x => { settled = true; return x; });
+          const runP = engine.json('/api/streetview/run', { job: c.job, project: pf, street: seg.limits.from || pf.project.name, looking: outputsStore.look, title: pf.project.name, setting: seg.setting, inpaint: ((seg.perspective?.original ?? seg.perspective?.src) || '').startsWith('https://maps.googleapis.com') ? undefined : [] }).catch(() => null).then(x => { settled = true; return x; });
           const rt = prog.tasks.find(x => x.key === rk);
           while (!settled) {   // the engine reports each rendering step: the bar follows it
             await Promise.race([runP, new Promise(res => setTimeout(res, 3000))]);
             if (settled) break;
             const st: any = await Promise.race([fetch(engine.url + `/api/run/${c.job}`).then(x => x.ok ? x.json() : null).catch(() => null), new Promise(res => setTimeout(() => res(null), 4000))]);
             if (st?.step && rt) {
-              const nCal = (st.steps || []).filter((x: any) => x[0] === 'calibrate').length;
-              rt.floor = st.step === 'calibrate' && nCal ? 0.39 : RENDER_AT[st.step] ?? rt.floor; rt.sub = RENDER_SAY[st.step] ?? st.step;
-              // a run moving faster or slower than expected re-times the rest
-              const el = (Date.now() - (rt.t0 ?? Date.now())) / 1000;
-              if ((rt.floor ?? 0) >= 0.3 && el > 20) rt.est = Math.max(rt.est * 0.5, Math.min(rt.est * 3, el / (rt.floor as number) * 0.5 + rt.est * 0.5));
+              const veh = st.veh ?? 0, pics = st.pics ?? 0, n = rt.n ?? 1;
+              rt.sub = st.step === 'render' ? (pics >= n ? 'finishing the pictures' : pics > 0 ? `drawing concept ${pics + 1} of ${n}` : veh > 0 ? 'clearing the roadway in the photo' : 'reading the vehicles in the photo') : ({ assist: 'solving the curbs', prep: 'reading the photo', calibrate: 'fitting the camera', sections: 'drawing the sections', sheet: 'laying out the sheets' } as Record<string, string>)[st.step] ?? st.step;
+              if (st.step === 'sections' || st.step === 'sheet') { rt.lo = 1 - R_TAIL / rWhole(n); rt.hi = 0.99; }
+              else if (st.step === 'render') {
+                const at = rAt(n, veh, pics);
+                if (at > (rt.lo ?? 0) && at > 0.1) {   // a new point reached: the rest of the run is re-timed from the real pace
+                  const el = (Date.now() - (rt.t0 ?? Date.now())) / 1000;
+                  rt.est = Math.max(20, 0.3 * rt.est + 0.7 * el / at);
+                }
+                rt.lo = at; rt.hi = Math.min(0.97, rNext(n, veh, pics));
+              } else { rt.lo = 0; rt.hi = R_SETUP / rWhole(n); }
             }
           }
           r = await runP;
@@ -195,6 +206,7 @@ export const buildStage: Stage = {
           if (!r) throw new Error('timed out waiting for the engine.');
           if (!r.ok) throw new Error(((r.steps || []).some((x: any) => x[0] === 'assist' && !x[1]) || !(r.steps || []).length ? '' : 'stopped at ' + ((r.steps || []).find((x: any) => !x[1]) || ['a step'])[0] + '. ') + String(r.log || '').split('\n').filter(Boolean).slice(0, (r.steps || []).some((x: any) => x[0] === 'assist' && !x[1]) ? 1 : undefined).slice(-2).join(' '));
           outputsStore.streetview = { job: r.job, pdfs: r.pdfs, renders: r.files.filter((x: any) => /_T\d+\.png$/.test(x.name)) };
+          if (rt?.t0) { try { const l = learned(); const u = (Date.now() - rt.t0) / 1000 / rWhole(rt.n ?? 1); l[rk + '-unit'] = Math.round(l[rk + '-unit'] ? 0.4 * l[rk + '-unit'] + 0.6 * u : u); localStorage.setItem(EST_KEY, JSON.stringify(l)); } catch { /* ignore */ } }
           log[log.length - 1] = `Concept renderings: done (${outputsStore.streetview.renders.length} rendering${outputsStore.streetview.renders.length === 1 ? '' : 's'}, sheet PDF).`;
         } catch (err) { log[log.length - 1] = 'Concept renderings: ' + (err as Error).message; }
       }
