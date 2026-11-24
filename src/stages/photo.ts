@@ -155,16 +155,10 @@ export const photoStage: Stage = {
 
           <p class="note">To change it, choose a source again above. Changing the photo clears the curbs.</p>` : '<p class="note">Choose a source first.</p>')}
         ${p && mode === 'idle' ? task(3, 'Clean up the photo (optional)', 'now', `
-          <p class="note"><b>Best result: ChatGPT or Gemini.</b> They remove the cars, rebuild the curb line, planting and frontage, and touch up the colour. The full instruction is written for you.</p>
-          <div class="row"><button class="btn" id="gpt">Open ChatGPT</button><button class="btn" id="gem">Open Gemini</button></div>
-          <ol class="steps">
-            <li><b>ChatGPT:</b> opens with the instruction filled in and the photo copied. Press <kbd>Ctrl</kbd>+<kbd>V</kbd> to paste the photo, then send.</li>
-            <li><b>Gemini:</b> opens with the instruction copied and the photo downloaded. Paste the instruction, attach the photo, then send.</li>
-            <li>Save the edited image, then bring it back here.</li>
-          </ol>
-          <div class="row"><label class="btn ghost">Upload the edited photo<input id="edited" type="file" accept="image/*" hidden></label></div>
+          <p class="note">ChatGPT or Gemini removes the cars, rebuilds the curbs and frontage and touches up the colour. The instruction is written for you.</p>
+          <div class="row"><button class="btn" id="gpt" title="Opens ChatGPT with the instruction filled in and the photo copied: paste it with Ctrl+V, then send">1. Open ChatGPT</button><button class="btn ghost" id="gem" title="Opens Gemini with the instruction copied and the photo downloaded: paste the instruction, attach the photo, then send">or Gemini</button><label class="btn" title="Bring the edited image back; it becomes the photo">2. Upload the result<input id="edited" type="file" accept="image/*" hidden></label></div>
           <div class="row minor"><button class="linkbtn" id="cpP">Copy the instruction</button><button class="linkbtn" id="cpI">Copy the photo</button><button class="linkbtn" id="dlI">Download the photo</button></div>
-          <p class="note">Or here, quicker and rougher: ${p.original ? '<button class="linkbtn" id="restore">restore the original photo</button>' : '<button class="linkbtn" id="clearnow">remove the cars automatically</button>'}</p>`) : ''}
+          <p class="note">Quicker and rougher, here: ${p.original ? '<button class="linkbtn" id="restore">restore the original photo</button>' : '<button class="linkbtn" id="clearnow">remove the cars automatically</button>'}</p>`) : ''}
         <p class="note" id="msg" role="status">${esc(msgText)}</p>`;
       void picking;
       const $ = (q: string) => side.querySelector(q) as HTMLElement | null;

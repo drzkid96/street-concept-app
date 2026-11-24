@@ -40,6 +40,18 @@ export const engine = {
     return j;
   }
 };
+// Built files are copied into the browser as soon as they exist, so viewing, downloading and marking them up never
+// depends on the engine still holding them (it forgets its files whenever it restarts or goes idle).
+const kept = new Map<string, { blob: Blob; href: string }>();
+export const keeper = {
+  async keep(url?: string | null) {
+    if (!url || kept.has(url)) return;
+    try { const r = await engine.send(url); if (!r.ok) return; const blob = await r.blob(); kept.set(url, { blob, href: URL.createObjectURL(blob) }); } catch { /* still on the engine for now */ }
+  },
+  href(url: string) { return kept.get(url)?.href ?? engine.abs(url); },
+  blob(url: string) { return kept.get(url)?.blob; },
+  clear() { kept.forEach(k => URL.revokeObjectURL(k.href)); kept.clear(); }
+};
 const listeners = new Set<() => void>();
 export const onEngine = (f: () => void) => { listeners.add(f); return () => listeners.delete(f); };
 

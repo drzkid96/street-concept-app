@@ -77,6 +77,17 @@ pill.addEventListener('click', () => {
 engine.check();
 setInterval(() => engine.check(), 30000);
 
+// The task to do next is always in view: when a step moves on to its next task, the panel brings it up without any scrolling.
+let seenTask = '';
+new MutationObserver(() => requestAnimationFrame(() => {
+  const now = side.querySelector('details.task.now[open]') as HTMLElement | null;
+  const key = (current?.id ?? '') + '|' + (now?.dataset.key ?? '');
+  if (key === seenTask) return;
+  seenTask = key;
+  if (!now) { side.scrollTop = 0; return; }
+  const top = now.getBoundingClientRect().top - side.getBoundingClientRect().top + side.scrollTop;
+  if (now.getBoundingClientRect().bottom > side.getBoundingClientRect().bottom || now.getBoundingClientRect().top < side.getBoundingClientRect().top) side.scrollTop = Math.max(0, top - 8);
+})).observe(document.body, { childList: true, subtree: true });
 go(location.hash.slice(1) || 'site');
 // a Street View photo left over from another segment is dropped before anything is built on it
 verifyPhoto().then(gone => { if (gone) go(current && ['site', 'existing', 'alts'].includes(current.id) ? current.id : 'photo'); });

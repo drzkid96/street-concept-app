@@ -1,7 +1,7 @@
 // Build: every input is gathered in steps 1 to 5. Here the person picks the outputs and builds them in one run.
 import { live, repaintNav, goTo, type Stage } from './index';
 import { project } from '../lib/project';
-import { engine, outputsStore, curbsOk } from '../lib/engine';
+import { engine, outputsStore, curbsOk, keeper } from '../lib/engine';
 import { head, task, more, esc } from './ui';
 import { aerialOf, type LngLat } from '../lib/providers';
 
@@ -104,11 +104,11 @@ export const buildStage: Stage = {
     };
     const showCanvas = () => {
       const r = outputsStore.streetview?.renders ?? [], c = outputsStore.concepts;
-      canvas.innerHTML = r.length || c ? `<div class="persp-wrap">${r.map(f => `<figure class="persp"><img src="${engine.abs(f.url)}" alt="${esc(f.name)}"><figcaption>${esc(f.name)}</figcaption></figure>`).join('')}</div>`
+      canvas.innerHTML = r.length || c ? `<div class="persp-wrap">${r.map(f => `<figure class="persp"><img src="${keeper.href(f.url)}" alt="${esc(f.name)}"><figcaption>${esc(f.name)}</figcaption></figure>`).join('')}</div>`
         : '<div class="empty">Outputs appear here after the build.</div>';
     };
     async function build() {
-      building = true; log.length = 0; paint();
+      building = true; log.length = 0; keeper.clear(); paint();
       // only the alternatives switched on go into the outputs
       const pf = structuredClone(project.get()); pf.segments.forEach(g => { g.alternatives = g.alternatives.filter(a => a.enabled !== false); });
       const KEYS: [string, string, string][] = [['Existing conditions report', 'existing', 'Existing conditions report'], ['Concept sections sheet', 'sections', 'Sections sheet'], ['Cost estimate', 'cost', 'Cost estimate'], ['Concept renderings', 'render', 'Renderings'], ['Compiling', 'compile', 'Compiling the PDF set'], ['AI handoff ZIP', 'zip', 'Handoff ZIP']];
@@ -224,6 +224,8 @@ export const buildStage: Stage = {
           log[log.length - 1] = `AI handoff ZIP: done (${Math.round(r.bytes / 1024 / 1024 * 10) / 10} MB).`;
         } catch (err) { log[log.length - 1] = 'AI handoff ZIP: stopped. ' + (err as Error).message; }
       }
+      // every output is copied into the browser now, while the engine still has it
+      await Promise.all([outputsStore.existingReport?.pdf, ...(outputsStore.streetview?.pdfs ?? []).map(f => f.url), ...(outputsStore.streetview?.renders ?? []).map(f => f.url), outputsStore.sections?.pdf, outputsStore.concepts?.pdf, outputsStore.concepts?.xlsx, outputsStore.compiled?.pdf, outputsStore.handoff?.zip].map(u => keeper.keep(u)));
       if (curKey) progEnd(curKey, !/stopped|could not|timed out/i.test(log[log.length - 1] || ''));
       window.clearInterval(prog.timer); prog.tasks = [];
       building = false; repaintNav();
