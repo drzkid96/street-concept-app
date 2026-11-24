@@ -36,6 +36,7 @@ export interface Segment {
   curbs: unknown[];
   existing: Section;
   existingChecked?: boolean;
+  existingAuto?: import('./existingAuto').AutoResult; // how the existing section was filled (OSM + photo check)
   alternatives: Alternative[];
 }
 

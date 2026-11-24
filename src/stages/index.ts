@@ -4,7 +4,8 @@ import { sectionEditor } from './sectionEditor';
 import { siteStage } from './site';
 import { costStage } from './cost';
 import { sheetsStage } from './sheets';
-import { guessExisting } from '../lib/osmGuess';
+import { autoExisting, pathKey, type AutoResult } from '../lib/existingAuto';
+import type { LngLat } from '../lib/providers';
 import { visualizeStage } from './visualize';
 import { head, task, esc } from './ui';
 import type { Alternative } from '../lib/types';
@@ -16,37 +17,53 @@ export const live = { gen: 0 };
 
 
 const site = siteStage;
+let autoRunning = '';
 const existing: Stage = {
   id: 'existing', name: 'Existing',
   done: () => !!project.seg().existingChecked,
   render(side, canvas) {
     const seg = project.seg();
     const gen = live.gen;
-    const has = !!seg.path && seg.path.length > 1;
-    side.innerHTML = `${head(2, 'Existing street', 'Describe the street as it is today, curb to curb and back of walk.')}
-      ${task(1, 'Fill it in from OpenStreetMap', seg.existingChecked ? 'done' : 'now', `
-        <p class="note">${has ? 'Reads lanes, bike lanes, parking and sidewalks along your segment.' : 'Mark the segment in Site first, or type the section in below.'}</p>
-        <div class="row"><button class="btn" id="guess"${has ? '' : ' disabled'}>Fill from OpenStreetMap</button></div>
-        <p class="note" id="gmsg" role="status"></p>`)}
-      ${task(2, 'Check it and fix anything wrong', seg.existingChecked ? 'done' : 'now', `
-        <p class="note">OpenStreetMap often has no parking or width data. Compare with a photo or aerial: remove parking that is not there, and adjust widths.</p>
+    const path = (seg.path ?? []) as LngLat[];
+    const has = path.length > 1, key = pathKey(path);
+    const a = seg.existingAuto;
+    // A section the person already confirmed is never refilled on its own, unless the segment itself moved.
+    const stale = has && (a ? a.key !== key : !seg.existingChecked);
+    const pct = (w: number) => `${w}%`;
+    const sources = (r: AutoResult) => `
+      <ul class="sources">
+        <li><b>OpenStreetMap</b> <span class="wt">weight ${pct(100 - r.photo.weight)}</span><span>${esc(r.osm.street)} (${esc(r.osm.cls)}): ${esc(r.osm.summary)}.</span>${r.osm.notes.length ? `<span class="note">${r.osm.notes.map(esc).join('; ')}.</span>` : ''}</li>
+        <li><b>Street View photo</b> <span class="wt">weight ${pct(r.photo.weight)}</span><span>${esc(r.photo.summary)}</span>${r.photo.source ? `<span class="note">${esc(r.photo.source)}</span>` : ''}</li>
+      </ul>
+      ${r.agree ? `<p class="note">${esc(r.agree)}</p>` : ''}
+      ${r.changes.length ? `<table class="mini-t"><thead><tr><th>Width (ft)</th><th class="num">OSM</th><th class="num">Photo</th><th class="num">Used</th></tr></thead><tbody>${r.changes.map(c => `<tr><td>${esc(c.label)}</td><td class="num">${c.osm}</td><td class="num">${c.photo}</td><td class="num"><b>${c.final}</b></td></tr>`).join('')}</tbody></table>` : ''}
+      ${r.flags.length ? `<ul class="flags">${r.flags.map(f => `<li>${esc(f)}</li>`).join('')}</ul>` : '<p class="okline">No conflicts between OpenStreetMap and the photo.</p>'}
+      <div class="row"><button class="linkbtn" id="again">Fill again</button></div>`;
+    side.innerHTML = `${head(2, 'Existing street', 'The street as it is today. Filled in for you from OpenStreetMap, checked against the Street View photo.')}
+      ${task(1, 'Filled automatically', !has ? 'later' : stale ? 'now' : 'done', !has ? '<p class="note">Mark the segment in <a href="#site">Site</a> first.</p>' : stale ? '<p class="note" id="prog">Starting…</p>' : a ? sources(a) : '<p class="note">You entered and confirmed this section yourself.</p><div class="row"><button class="linkbtn" id="again">Fill again from OpenStreetMap and the photo</button></div>')}
+      ${task(2, 'Check it and fix anything wrong', seg.existingChecked ? 'done' : stale ? 'later' : 'now', `
+        <p class="note">OpenStreetMap rarely has widths or parking. Fix anything that does not match the street, then confirm.</p>
         <div id="ed"></div>
-        <label class="check-row"><input type="checkbox" id="ok"${seg.existingChecked ? ' checked' : ''}> This matches the street today</label>`)}`;
+        <label class="check-row"><input type="checkbox" id="ok"${seg.existingChecked ? ' checked' : ''}${stale ? ' disabled' : ''}> This matches the street today</label>`)}`;
     const draw = () => { canvas.innerHTML = sectionSvg(seg.existing, `${seg.limits.from || 'Segment'} existing`); };
-    const mount = () => sectionEditor(side.querySelector('#ed') as HTMLElement, seg.existing, () => { project.update(() => {}); draw(); });
+    sectionEditor(side.querySelector('#ed') as HTMLElement, seg.existing, () => { project.update(() => {}); draw(); });
     side.querySelector('#ok')!.addEventListener('change', e => { project.update(() => { seg.existingChecked = (e.target as HTMLInputElement).checked; }); repaintNav(); existing.render(side, canvas); });
-    side.querySelector('#guess')!.addEventListener('click', async () => {
-      const msg = side.querySelector('#gmsg')!;
-      msg.textContent = 'Reading OpenStreetMap…';
-      try {
-        const g = await guessExisting((seg.path ?? []) as [number, number][]);
-        if (gen !== live.gen) return;
-        project.update(() => { seg.existing = g.section; seg.existingChecked = false; if (!seg.limits.from) seg.limits.from = g.street; });
-        existing.render(side, canvas);
-        side.querySelector('#gmsg')!.innerHTML = `Filled from <b>${esc(g.street)}</b> (${esc(g.cls)}). ${g.notes.map(esc).join('; ')}. © OpenStreetMap contributors`;
-      } catch (err) { msg.textContent = (err as Error).message; }
-    });
-    mount(); draw();
+    side.querySelector('#again')?.addEventListener('click', () => { project.update(() => { delete seg.existingAuto; seg.existingChecked = false; }); existing.render(side, canvas); });
+    draw();
+    if (stale && autoRunning !== key) {
+      autoRunning = key;
+      const prog = (t: string) => { const el = side.querySelector('#prog'); if (el && gen === live.gen) el.textContent = t; };
+      autoExisting(path, prog).then(r => {
+        autoRunning = '';
+        project.update(() => {
+          seg.existing = r.section; seg.existingAuto = r; seg.existingChecked = false;
+          if (!seg.limits.from) seg.limits.from = r.osm.street;
+          if (!seg.perspective && r.photoSrc) seg.perspective = r.photoSrc;   // the same photo starts the Render step
+        });
+        repaintNav();
+        if (gen === live.gen) existing.render(side, canvas);
+      }).catch(err => { autoRunning = ''; prog('Could not fill automatically: ' + (err as Error).message + '. Type the section in below.'); });
+    }
   }
 };
 
