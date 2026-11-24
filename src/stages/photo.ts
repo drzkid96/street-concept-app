@@ -86,7 +86,9 @@ async function pngOf(src: string): Promise<Blob> {
 }
 /** The edited picture, fitted back to the size of the photo it came from (centre-cropped if the model changed the shape). */
 async function fitTo(file: File, w: number, h: number): Promise<{ src: string; reshaped: boolean }> {
-  const bm = await createImageBitmap(file), c = document.createElement('canvas'); c.width = w; c.height = h;
+  const bm = await createImageBitmap(file), c = document.createElement('canvas');
+  // the edit often comes back sharper than the photo that went out: keep that detail, up to 1600 px wide, in the original shape
+  const k = Math.max(1, Math.min(1600 / w, bm.width / w)); w = Math.round(w * k); h = Math.round(h * k); c.width = w; c.height = h;
   const ar = w / h, br = bm.width / bm.height; let sx = 0, sy = 0, sw = bm.width, sh = bm.height;
   if (br > ar) { sw = bm.height * ar; sx = (bm.width - sw) / 2; } else { sh = bm.width / ar; sy = (bm.height - sh) / 2; }
   const g = c.getContext('2d')!; g.imageSmoothingQuality = 'high'; g.drawImage(bm, sx, sy, sw, sh, 0, 0, w, h);
