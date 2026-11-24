@@ -1,6 +1,6 @@
 import type { Section, ElementType, Direction } from '../lib/types';
-import { ELEMENTS, MATERIALS, materialOf, check, topicLink } from '../lib/standards';
-import { split, curbToCurb, roadsideLabel, setWidth, addElement, removeElement, setCurbToCurb } from '../lib/roadway';
+import { ELEMENTS, MATERIALS, materialOf } from '../lib/standards';
+import { split, curbToCurb, roadsideLabel, setWidth, addElement, removeElement, setCurbToCurb, limitsFor } from '../lib/roadway';
 
 const ROAD_TYPES = (Object.keys(ELEMENTS) as ElementType[]).filter(t => !['sidewalk', 'parkway', 'curb'].includes(t));
 const DIRS: Direction[] = ['none', 'inbound', 'outbound', 'both'];
@@ -18,12 +18,13 @@ export function sectionEditor(host: HTMLElement, sec: Section, onChange: () => v
       <table class="sec-table"><colgroup><col style="width:46%"><col style="width:22%"><col style="width:20%"><col style="width:12%"></colgroup>
         <thead><tr><th>Roadway, left curb to right curb</th><th class="num">Width (ft)</th><th>Dir</th><th></th></tr></thead>
         <tbody>${road.map((e, i) => {
-          const issues = check(e.type, e.width_ft);
+          const L = limitsFor(road, e);
+          const hint = L.pref && (e.width_ft < L.pref[0] || e.width_ft > L.pref[1]) ? `<span class="badge warn">${L.label}: preferred ${L.pref[0]}${L.pref[1] !== L.pref[0] ? '–' + L.pref[1] : ''} ft</span>` : '';
           return `<tr data-i="${i}">
             <td><select data-k="type" aria-label="Element">${ROAD_TYPES.map(t => `<option value="${t}"${t === e.type ? ' selected' : ''}>${ELEMENTS[t].label}</option>`).join('')}</select>
               ${MATERIALS[e.type] ? `<select data-k="material" aria-label="Option" style="margin-top:.25rem">${MATERIALS[e.type]!.map(([v, l]) => `<option value="${v}"${v === materialOf(e.type, e.material) ? ' selected' : ''}>${l}</option>`).join('')}</select>` : ''}
-              ${issues.map(x => `<a class="badge warn" href="${topicLink(e.type)}" target="_blank" rel="noopener">${x.msg}</a>`).join(' ')}</td>
-            <td class="num"><input data-k="width_ft" type="number" min="0" step="0.5" value="${e.width_ft}" aria-label="Width"></td>
+              ${hint}</td>
+            <td class="num"><input data-k="width_ft" type="number" min="${L.min}" max="${L.max}" step="0.5" value="${e.width_ft}" aria-label="Width" title="${L.label}: ${L.min} to ${L.max} ft"></td>
             <td><select data-k="direction" aria-label="Direction">${DIRS.map(d => `<option value="${d}"${d === e.direction ? ' selected' : ''}>${DIR_LABEL[d]}</option>`).join('')}</select></td>
             <td><button class="btn ghost" data-act="del" aria-label="Remove" style="min-height:32px;padding:.2rem .5rem">×</button></td>
           </tr>`;

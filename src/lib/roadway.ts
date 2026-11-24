@@ -9,6 +9,26 @@ export const DEFAULT_W: Record<ElementType, number> = { sidewalk: 10, parkway: 6
 export const LIMITS: Partial<Record<ElementType, [number, number]>> = { travel_lane: [9, 16], turn_lane: [9, 14], bus_lane: [10, 16], bike_lane: [5, 9], bike_buffer: [1, 10], parking: [7, 10], separated_bikeway: [5, 12], median: [2, 20], shoulder: [0, 20] };
 const half = (n: number) => Math.round(n * 2) / 2;
 const lim = (t: ElementType) => LIMITS[t] ?? [0.5, 40];
+
+// Bikeway widths by use and placement (ft): [minimum, preferred low, preferred high, practical maximum].
+export interface Lim { min: number; max: number; pref?: [number, number]; label: string }
+export function limitsFor(road: SectionElement[], e: SectionElement): Lim {
+  const i = road.indexOf(e), nb = [road[i - 1], road[i + 1]].filter(Boolean) as SectionElement[];
+  const beside = (t: ElementType) => nb.some(n => n.type === t);
+  const two = e.direction === 'both';
+  if (e.type === 'bike_lane') return beside('bike_buffer')
+    ? { min: 4, pref: [5, 7], max: 8, label: 'Class II buffered bike lane' }
+    : { min: 5, pref: [6, 7], max: 8, label: 'Class II bike lane' };
+  if (e.type === 'separated_bikeway') {
+    const island = e.material === 'curb' || e.material === 'raised';
+    if (!two) return island ? { min: 6, pref: [7, 9], max: 10, label: 'Class IV one-way, between curbs' } : { min: 5, pref: [6, 8], max: 9, label: 'Class IV one-way, curb and buffer' };
+    if (island) return { min: 10, pref: [12, 14], max: 16, label: 'Class IV two-way, between curbs' };
+    return beside('parking') ? { min: 9, pref: [10, 14], max: 16, label: 'Class IV two-way, parking buffer' } : { min: 9, pref: [10, 12], max: 14, label: 'Class IV two-way, traffic-side buffer' };
+  }
+  const [min, max] = lim(e.type);
+  const pref: Partial<Record<ElementType, [number, number]>> = { travel_lane: [10, 11], parking: [8, 8] };
+  return { min, max, pref: pref[e.type], label: e.type.replace(/_/g, ' ') };
+}
 export function split(sec: Section) {
   const els = sec.elements;
   let a = 0, b = els.length;
@@ -22,7 +42,7 @@ export const roadsideLabel = (els: SectionElement[]) => els.map(e => `${e.type =
 // Extra space: bike lanes, bike buffers and parking grow to their maximum first, then shoulders and buffers take
 // the rest. Missing space: shoulders, buffers and travel lanes above 10 ft give first, then everything down to minimums.
 const GIVE_ORDER: [ElementType[], number | null][] = [[['shoulder'], null], [['bike_buffer'], null], [['travel_lane'], 10], [['parking'], null], [['bike_lane'], null], [['turn_lane', 'bus_lane', 'travel_lane', 'separated_bikeway', 'median'], null]];
-const TAKE_ORDER: [ElementType[], number | null][] = [[['bike_lane'], null], [['bike_buffer'], null], [['parking'], null], [['shoulder'], null]];
+const TAKE_ORDER: [ElementType[], number | null][] = [[['bike_lane', 'separated_bikeway'], null], [['bike_buffer'], null], [['parking'], null], [['shoulder'], null]];
 function spread(pool: SectionElement[], amount: number, cap: (e: SectionElement) => number): number {
   // even shares, each element limited by cap(e); returns what could not be placed (same sign as amount)
   let left = amount;
@@ -39,11 +59,11 @@ function absorb(road: SectionElement[], delta: number, skip: SectionElement | nu
   let left = delta;
   for (const [types, floor] of delta > 0 ? TAKE_ORDER : GIVE_ORDER) {
     if (Math.abs(left) < 0.01) break;
-    left = spread(pool(types), left, e => delta > 0 ? lim(e.type)[1] : Math.max(floor ?? lim(e.type)[0], lim(e.type)[0]));
+    left = spread(pool(types), left, e => { const L = limitsFor(road, e); return delta > 0 ? L.max : Math.max(floor ?? L.min, L.min); });
   }
   if (delta > 0 && left > 0.01) {
     // nothing left to grow: the travel lanes take it up to their maximum
-    left = spread(pool(['travel_lane', 'turn_lane']), left, e => lim(e.type)[1]);
+    left = spread(pool(['travel_lane', 'turn_lane']), left, e => limitsFor(road, e).max);
   }
   road.forEach(e => { e.width_ft = half(e.width_ft); });
   return Math.abs(left) < 0.26;
@@ -64,8 +84,8 @@ function settle(road: SectionElement[], target: number, sec?: Section) {
 // Each returns a short message for the person, or throws when the change cannot fit between the curbs.
 export function setWidth(sec: Section, i: number, w: number): string {
   const { road } = split(sec), el = road[i], before = curbToCurb(sec);
-  const [lo, hi] = lim(el.type), asked = w; w = half(Math.min(hi, Math.max(lo, w)));
-  const held = asked !== w ? ` ${el.type.replace(/_/g, ' ')}s are ${lo} to ${hi} ft, so it is ${w} ft.` : '';
+  const L = limitsFor(road, el), asked = w; w = half(Math.min(L.max, Math.max(L.min, w)));
+  const held = asked !== w ? ` ${L.label}: ${L.min} to ${L.max} ft, so it is ${w} ft.` : '';
   const delta = w - el.width_ft;
   if (!delta) return held.trim();
   const snap = road.map(e => e.width_ft);
