@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Street Concept App</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Albert+Sans:ital,wght@0,300..700;1,400..700&display=swap">
+<style>
+/* VOICE: build spec, calm, exact
+   IDEA: a project binder with a plan-set index; stages are sheets
+   PICTURE: the pipeline strip, live, each stage opens its placeholder sheet
+   COLOUR and TYPE: F&P Slate, Emerald, Jade, Cream; Albert Sans only
+   LAYOUT: sheet index left, sheet content right, stacks below 900px */
+:root{color-scheme:light dark;--bg:light-dark(#FFFFFF,#00242E);--ink:light-dark(#00242E,#FFFFFF);--sub:light-dark(#00574A,#6BD688);--rule:light-dark(#EEEDE8,#1d4550);--band:light-dark(#F2F2F2,#0a3440);--card:light-dark(#EEEDE8,#0a3440)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 'Albert Sans',sans-serif;overflow-x:clip}
+h1,h2,h3{font-weight:600;line-height:1.1;margin:0 0 .5em;text-wrap:balance}
+h1{font-size:clamp(30px,4vw,44px)}h2{font-size:26px;color:var(--sub)}h3{font-size:18px}
+.band{padding:clamp(24px,4vw,56px) max(5vw,16px)}
+.top{background:#00242E;color:#fff}.top p{max-width:70ch;margin:0;color:#D9F1D6}
+.logo{width:160px;height:28px;margin-bottom:18px}
+.flow{display:flex;gap:6px;overflow-x:auto;padding:4px 0 10px;scroll-snap-type:x mandatory}
+.flow button{flex:none;scroll-snap-align:start;font:600 15px 'Albert Sans';min-height:44px;padding:10px 14px;border:0;border-radius:6px;background:#00574A;color:#fff;cursor:pointer}
+.flow button[aria-current=true]{background:#6BD688;color:#00242E}
+.flow button span{opacity:.7;margin-right:6px}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;max-width:1240px}
+@media(max-width:900px){.grid{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--card);border-radius:8px;padding:20px}
+.ph{border:2px dashed var(--sub);border-radius:8px;padding:18px;min-height:140px;display:grid;place-items:center;text-align:center;color:var(--sub);font-weight:500}
+ul{padding-left:1.2em;margin:.3em 0}li{margin:.25em 0}
+table{border-collapse:collapse;width:100%;font-size:15px}
+th{background:#00574A;color:#fff;text-align:left;padding:8px 10px;vertical-align:middle}
+td{padding:8px 10px;border-bottom:1px solid var(--rule);vertical-align:middle}
+tr:nth-child(even) td{background:var(--band)}
+pre{background:var(--band);padding:14px;border-radius:6px;overflow-x:auto;font-size:13px;line-height:1.45}
+.note{font-size:13px;opacity:.75}
+pre,.scroll{overflow-x:auto}code{overflow-wrap:anywhere}
+@media(max-width:600px){table{font-size:13px}.stack thead{display:none}.stack tr{display:grid;padding-block:10px}.stack td{display:flow-root;border:0;padding:3px 0;padding-inline-start:8em;text-align:start}.stack td::before{content:attr(data-l);float:inline-start;width:7.5em;margin-inline-start:-8em;white-space:normal;font-weight:600}.stack td:empty{display:none}}
+</style><script>new MutationObserver(()=>{for(const c of document.querySelectorAll('.stack td:not([data-l])')){let i=0,p=c;while(p=p.previousElementSibling)i+=p.colSpan;c.dataset.l=c.closest('table').rows[0].cells[i]?.textContent||''}}).observe(document,{childList:true,subtree:true})</script></head><body>
+
+<header class="band top">
+  <div class="logo" aria-label="Wordmark placeholder: supplied F&amp;P PNG goes here"></div>
+  <h1>STREET CONCEPT APP: BUILD OUTLINE</h1>
+  <p>One flow, one project file. A location goes in; existing conditions, priced alternatives, renderings and branded sheets come out, then run through markup review to approval. Modeled on Southern California standards. Placeholders mark every screen still to build.</p>
+</header>
+
+<section class="band">
+  <h2>FLOW</h2>
+  <nav class="flow" id="flow" aria-label="Stages"></nav>
+  <div class="grid" id="stage"></div>
+</section>
+
+<section class="band" style="background:var(--band)">
+  <div class="grid">
+    <div>
+      <h2>PROJECT FILE (THE SPINE)</h2>
+      <p>Every stage reads and writes one JSON project. The section object is the core: plans and aerials produce it, alternatives edit it, costs and renderings derive from it.</p>
+<pre>{
+  "project": { "id", "name", "agency", "brand": "fp|personal" },
+  "segments": [{
+    "id", "limits": { "from", "to" }, "length_ft",
+    "location": { "lat", "lng", "heading", "pano_id" },
+    "curbs": [ /* polylines, approved flag */ ],
+    "existing": Section,
+    "alternatives": [{ "name", "tier", "section": Section,
+                       "cost": Estimate, "renders": [ ] }]
+  }],
+  "review": [{ "sheet", "markups": [ ], "status", "approved_at" }],
+  "standards_version": "2026-11"
+}
+Section = { "elements": [{ "type", "width_ft",
+  "direction", "material", "markings", "std_ref" }] }</pre>
+    </div>
+    <div>
+      <h2>STANDARDS REGISTRY</h2>
+      <p>One versioned table drives widths, markings, colors and checks. Each rule carries its source so CA MUTCD, Caltrans, agency direction and F&amp;P convention stay separate.</p>
+      <table class="stack">
+        <thead><tr><th>Source</th><th>Feeds</th></tr></thead>
+        <tbody>
+          <tr><td>CA MUTCD (current revision)</td><td>Markings, colors, signs, stop bar placement</td></tr>
+          <tr><td>Caltrans HDM, DIBs (Class IV, complex bikeways)</td><td>Lane and bikeway widths, buffers</td></tr>
+          <tr><td>Caltrans Standard Plans</td><td>Pavement marking details, unit cost items</td></tr>
+          <tr><td>SPPWC Greenbook standard plans</td><td>Curb, gutter, ramp, local construction details</td></tr>
+          <tr><td>LADOT / LA Complete Streets Design Guide, BOE S-plans</td><td>City of LA overrides</td></tr>
+          <tr><td>LA County DPW, other agency standards</td><td>Agency override layer</td></tr>
+          <tr><td>PROWAG, CBC 11B</td><td>Pedestrian access route checks</td></tr>
+          <tr><td>LA Metro bus stop guidance</td><td>Stops, bus lanes, layovers</td></tr>
+          <tr><td>F&amp;P convention</td><td>5 ft stop bar offset, green bike lanes, red bus lanes with BUS LANE text</td></tr>
+        </tbody>
+      </table>
+      <p class="note">Precedence: agency comments, then agency standard, then state, then F&amp;P convention.</p>
+    </div>
+  </div>
+</section>
+
+<section class="band">
+  <div class="grid">
+    <div>
+      <h2>APIS</h2>
+      <table class="stack">
+        <thead><tr><th>API</th><th>Use</th><th>Stage</th></tr></thead>
+        <tbody>
+          <tr><td>Google Maps JavaScript API</td><td>Base map, segment drawing, key maps</td><td>1</td></tr>
+          <tr><td>Street View Static + Street View Service</td><td>Pano capture by pano_id, heading, pitch, FOV</td><td>1, 5</td></tr>
+          <tr><td>Maps Static / Map Tiles (satellite, 2D)</td><td>Aerial for curbs and plan view</td><td>1, 2, 5</td></tr>
+          <tr><td>Geocoding + Places</td><td>Address and cross-street search, limits</td><td>1</td></tr>
+          <tr><td>Roads API</td><td>Snap centerline, segment length</td><td>1, 4</td></tr>
+          <tr><td>Elevation API</td><td>Grade, vertical curves for renderings</td><td>5</td></tr>
+          <tr><td>Google Drive / Sheets API (optional)</td><td>Save project, export estimate</td><td>6</td></tr>
+          <tr><td>OpenStreetMap Overpass (optional)</td><td>Network context, destinations</td><td>1</td></tr>
+          <tr><td>Claude API (optional AI hook)</td><td>Read plans, propose curbs and concepts</td><td>2, 3, 5</td></tr>
+        </tbody>
+      </table>
+      <p class="note">Keys stay server-side behind a small proxy. Google terms limit caching and reuse of Street View imagery; confirm terms for renderings before external use.</p>
+    </div>
+    <div>
+      <h2>STACK AND BUILD PHASES</h2>
+      <ul>
+        <li><b>Front end:</b> static site (Vite + plain TS or React), SVG section editor, pdf-lib for sheets.</li>
+        <li><b>Engine:</b> existing skill scripts as a Python package; run as a small API (FastAPI) or in-browser through Pyodide.</li>
+        <li><b>Data:</b> unit costs and standards as versioned CSV/JSON in the repo; assets as SVG library.</li>
+        <li><b>Fonts:</b> Albert Sans bundled (OFL). Gill Sans needs a license before any distributed build.</li>
+        <li><b>Hosting:</b> internal F&amp;P host for work use; public build later for Esquina with non-F&amp;P data.</li>
+      </ul>
+      <table>
+        <thead><tr><th>Phase</th><th>Scope</th></tr></thead>
+        <tbody>
+          <tr><td>0</td><td>Repo, project schema, standards registry, unit cost data</td></tr>
+          <tr><td>1</td><td>Section editor + cost estimate + 11x17 sheet export (no AI)</td></tr>
+          <tr><td>2</td><td>Google map, segment, Street View capture, key maps</td></tr>
+          <tr><td>3</td><td>Markup review page with JSON markup export</td></tr>
+          <tr><td>4</td><td>Curb tool and asset-based renderings</td></tr>
+          <tr><td>5</td><td>Optional Claude API hooks; DXF/DWG export</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<script>{
+const S=[
+ ["Site","Search address or cross streets, draw segment limits, capture Street View and satellite, key maps.","google-images-scrape, osm-joint-network","Map + segment panel","Location, pano_id, length"],
+ ["Existing","Trace curbs on aerial, build existing section from aerial, photo or S&S plan.","fp-render-curbs, ss-plan-section, fp-section-builder","Aerial with curb tool; section editor","Curbs, existing section"],
+ ["Alternatives","Duplicate existing, edit elements by tier, auto-name from changes, check against registry.","fp-section-builder","Side-by-side section editor","Alternatives with std_ref checks"],
+ ["Cost","Quantities from widths and length, priced by region and delivery tier, A/B/C reliability.","fp-section-builder, caltrans-unit-costs","Estimate table per alternative","Estimate, .xlsx export"],
+ ["Visualize","Place assets per section on Street View, drone or plan view, scaled to vanishing point.","fp-render-streetview, fp-render-plan, fp-core-assets","Render canvas with layers","PNG, layered SVG"],
+ ["Sheets","Lay out sections, costs and renderings on 11x17 landscape sheets, brand and layout check.","fp-core-brand, adrian-personal-brand, adrian-work-playbook","Sheet preview","PDF with embedded fonts"],
+ ["Review","Callouts, clouds, lines, pen; SEND exports markups; APPROVED locks a revision.","fp-core-review","Markup viewer","Markup JSON, approval record"],
+ ["Handoff","Export plan geometry to CAD.","dxf-to-dwg","Export panel","DXF, DWG"]];
+const flow=document.getElementById('flow'),st=document.getElementById('stage');
+const esc=t=>String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+flow.innerHTML=S.map((s,i)=>`<button data-i="${i}"><span>${i+1}</span>${esc(s[0].toUpperCase())}</button>`).join('');
+function show(i){
+ flow.querySelectorAll('button').forEach((b,j)=>b.setAttribute('aria-current',j===i));
+ const s=S[i];
+ st.innerHTML=`<div class="card"><h3>${i+1}. ${esc(s[0].toUpperCase())}</h3><p>${esc(s[1])}</p>
+ <p><b>Replaces skills:</b> ${esc(s[2])}</p><p><b>Outputs to project file:</b> ${esc(s[4])}</p></div>
+ <div class="ph">PLACEHOLDER SCREEN<br>${esc(s[3])}</div>`;
+}
+flow.addEventListener('click',e=>{const b=e.target.closest('button');if(b)show(+b.dataset.i)});
+show(0);
+}</script>
+</body>
+</html>

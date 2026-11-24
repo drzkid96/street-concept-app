@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Street Concept App</title>
+  <meta name="description" content="Street concept packages for Southern California: site, existing section, alternatives, cost, renderings, sheets, review.">
+</head>
+<body>
+  <div class="app">
+    <header class="top">
+      <h1>STREET CONCEPT APP</h1>
+      <div class="proj">
+        <input id="proj-name" aria-label="Project name" placeholder="Project name">
+        <button class="btn ghost" id="export">Export</button>
+        <label class="btn ghost" for="import" style="display:inline-grid;place-items:center">Import</label>
+        <input id="import" type="file" accept="application/json" hidden>
+      </div>
+    </header>
+    <nav class="stages" id="stages" aria-label="Stages"></nav>
+    <div class="work">
+      <aside class="side" id="side"></aside>
+      <section class="canvas" id="canvas" aria-label="Workspace"></section>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

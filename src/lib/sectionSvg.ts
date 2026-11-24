@@ -1,0 +1,38 @@
+import type { Section } from './types';
+import { ELEMENTS, CONVENTIONS } from './standards';
+
+const esc = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+
+// Plan-agnostic 2D section: element widths to scale, labels and dimensions below.
+export function sectionSvg(sec: Section, title = ''): string {
+  const els = sec.elements;
+  const total = els.reduce((a, e) => a + (e.width_ft || 0), 0) || 1;
+  const W = 1000, scale = (W - 40) / total, top = 60, roadH = 90;
+  let x = 20;
+  const parts: string[] = [];
+  els.forEach(e => {
+    const w = e.width_ft * scale, meta = ELEMENTS[e.type];
+    const raised = e.type === 'sidewalk' || e.type === 'parkway' || e.type === 'median' || e.type === 'curb';
+    const y = raised ? top - 8 : top;
+    parts.push(`<rect x="${x}" y="${y}" width="${w}" height="${roadH + (raised ? 8 : 0)}" fill="${meta.fill}" stroke="var(--bg)" stroke-width="1"/>`);
+    if (e.type === 'bus_lane' && w > 40)
+      parts.push(`<text x="${x + w / 2}" y="${top + roadH / 2 + 5}" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">${CONVENTIONS.bus_lane_text}</text>`);
+    if (e.direction === 'inbound' || e.direction === 'outbound') {
+      const ay = top + roadH - 18, dir = e.direction === 'outbound' ? 1 : -1, cx = x + w / 2;
+      parts.push(`<path d="M${cx - 10 * dir} ${ay} L${cx + 10 * dir} ${ay} M${cx + 4 * dir} ${ay - 5} L${cx + 10 * dir} ${ay} L${cx + 4 * dir} ${ay + 5}" stroke="#fff" stroke-width="2" fill="none"/>`);
+    }
+    const ly = top + roadH + 26;
+    if (w > 28) {
+      parts.push(`<text x="${x + w / 2}" y="${ly}" text-anchor="middle" font-size="12" font-weight="600" fill="currentColor">${esc(meta.label)}</text>`);
+      parts.push(`<text x="${x + w / 2}" y="${ly + 16}" text-anchor="middle" font-size="12" fill="currentColor">${e.width_ft}'</text>`);
+    }
+    parts.push(`<line x1="${x}" y1="${top + roadH + 6}" x2="${x}" y2="${top + roadH + 12}" stroke="currentColor"/>`);
+    x += w;
+  });
+  parts.push(`<line x1="${x}" y1="${top + roadH + 6}" x2="${x}" y2="${top + roadH + 12}" stroke="currentColor"/>`);
+  return `<svg class="section-svg" viewBox="0 0 ${W} ${top + roadH + 70}" role="img" aria-label="Cross-section ${esc(title)}" style="color:var(--ink)">
+    <text x="20" y="28" font-size="16" font-weight="600" fill="currentColor">${esc(title.toUpperCase())}</text>
+    <text x="${W - 20}" y="28" text-anchor="end" font-size="13" fill="currentColor">${total}' TOTAL</text>
+    ${parts.join('')}
+  </svg>`;
+}

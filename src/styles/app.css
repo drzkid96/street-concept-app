@@ -1,0 +1,57 @@
+*{box-sizing:border-box;min-width:0}
+html,body{height:100%}
+body{margin:0;font:16px/1.5 var(--font);color:var(--ink);background:var(--bg)}
+h1,h2,h3{font-weight:600;line-height:1.15;margin:0 0 .5em}
+h2{font-size:1.35rem;color:var(--accent)}h3{font-size:1.05rem}
+a{color:var(--accent)}
+button,input,select{font:inherit}
+
+.app{display:grid;grid-template-rows:auto auto 1fr;height:100vh}
+.top{display:flex;align-items:center;gap:1rem;padding:.6rem 1.25rem;border-bottom:2px solid var(--fp-emerald);background:var(--bg)}
+.top h1{font-size:1.1rem;margin:0}
+.top .proj{margin-left:auto;display:flex;gap:.5rem;align-items:center}
+.top input{padding:.45rem .7rem;border:1px solid var(--input-line);border-radius:8px;background:var(--bg);color:var(--ink);width:min(260px,40vw)}
+
+.stages{display:flex;gap:.35rem;overflow-x:auto;padding:.5rem 1.25rem;background:var(--panel);scroll-snap-type:x mandatory}
+.stages button{flex:none;scroll-snap-align:start;min-height:40px;border:1px solid var(--input-line);background:var(--bg);color:var(--ink);border-radius:999px;padding:.35rem .9rem;cursor:pointer;font-weight:600;font-size:.9rem}
+.stages button[aria-current='true']{background:var(--fp-emerald);border-color:var(--fp-emerald);color:#fff}
+.stages button .n{opacity:.6;margin-right:.35rem}
+
+.work{display:grid;grid-template-columns:minmax(0,460px) minmax(0,1fr);min-height:0}
+@media(max-width:860px){.work{grid-template-columns:minmax(0,1fr);grid-auto-rows:auto minmax(360px,1fr)}.app{height:auto;min-height:100vh}}
+.side{background:var(--panel);padding:1.1rem 1.25rem;overflow:auto;border-right:1px solid var(--line)}
+.canvas{position:relative;min-height:0;overflow:auto;background:var(--band)}
+.empty{height:100%;min-height:320px;display:grid;place-items:center;color:var(--muted);text-align:center;padding:2rem}
+
+.btn{font-weight:600;border:0;background:var(--fp-emerald);color:#fff;border-radius:8px;padding:.5rem .9rem;cursor:pointer;min-height:40px}
+.btn.ghost{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+.btn:focus-visible,.stages button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--fp-light-green);outline-offset:2px}
+.row{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin:.5rem 0}
+.field{display:grid;gap:.25rem;margin:.6rem 0}
+.field label{font-size:.85rem;font-weight:600}
+.field input,.field select{padding:.5rem .7rem;border:1px solid var(--input-line);border-radius:8px;background:var(--bg);color:var(--ink);min-height:40px}
+
+.todo{border:2px dashed var(--fp-jade);border-radius:8px;padding:.75rem .9rem;color:var(--accent-2);font-size:.9rem;margin:.9rem 0}
+.todo b{display:block;font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;margin-bottom:.2rem}
+.srcbar{background:var(--band);border-left:4px solid var(--fp-emerald);padding:.45rem .75rem;border-radius:6px;font-size:.85rem;margin:.6rem 0}
+.note{font-size:.8rem;color:var(--muted)}
+
+table{border-collapse:collapse;width:100%;font-size:.88rem}
+th{background:var(--fp-emerald);color:#fff;text-align:left;padding:.45rem .55rem;vertical-align:middle;font-weight:600}
+td{padding:.4rem .55rem;border-bottom:1px solid var(--fp-cream);vertical-align:middle}
+tbody tr:nth-child(even){background:var(--band)}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td input,td select{width:100%;padding:.3rem .4rem;border:1px solid var(--input-line);border-radius:6px;background:var(--bg);color:var(--ink)}
+td input[type=number]{text-align:right}
+
+.section-svg{display:block;width:100%;height:auto;max-height:100%;padding:1rem}
+.map{position:absolute;inset:0}
+.badge{display:inline-block;font-size:.68rem;font-weight:700;padding:.05rem .45rem;border-radius:999px;background:var(--fp-pale-green);color:var(--fp-emerald)}
+.badge.warn{background:#FFE6DC;color:#B83D08}
+
+.sec-table{table-layout:fixed}.sec-table td{padding:.3rem .3rem}.sec-table td select,.sec-table td input{padding:.3rem .35rem}
+.sel{padding:.5rem .7rem;border:1px solid var(--input-line);border-radius:8px;background:var(--bg);color:var(--ink);min-height:40px;flex:1 1 160px}
+.scroll{overflow-x:auto}.scroll table{min-width:560px}
+.top{flex-wrap:wrap}
+@media(max-width:600px){.top .proj{margin-left:0;width:100%}.top input{flex:1 1 auto;width:auto}}
+.top .btn{white-space:nowrap;padding:.45rem .75rem}

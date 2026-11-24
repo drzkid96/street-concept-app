@@ -1,0 +1,44 @@
+/* Design tokens taken from SoCal Super Standards (src/styles/site.css): F&P palette, Albert Sans only */
+:root {
+  --fp-slate: #00242E;
+  --fp-emerald: #00574A;
+  --fp-jade: #1B795A;
+  --fp-light-green: #6BD688;
+  --fp-pale-green: #D9F1D6;
+  --fp-cream: #EEEDE8;
+  --fp-band: #F2F2F2;
+  --fp-grid: #E7E8E8;
+  --fp-blue: #568CBB;
+  --fp-orange: #FF6622;
+  --input-line: #D0D4D4;
+
+  /* street graphics (CA MUTCD colours, F&P convention) */
+  --st-bike: #2E8B57;
+  --st-bus: #C8102E;
+  --st-asphalt: #4A4F54;
+  --st-concrete: #C9C6BD;
+  --st-landscape: #7FA65A;
+  --st-marking-white: #FFFFFF;
+  --st-marking-yellow: #F2C200;
+
+  --font: 'Albert Sans Variable', 'Albert Sans', sans-serif;
+
+  --bg: #FFFFFF;
+  --ink: var(--fp-slate);
+  --accent: var(--fp-emerald);
+  --accent-2: var(--fp-jade);
+  --panel: var(--fp-cream);
+  --band: var(--fp-band);
+  --line: var(--fp-grid);
+  --muted: #5b6b70;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: var(--fp-slate); --ink: #FFFFFF; --accent: var(--fp-light-green); --accent-2: var(--fp-light-green);
+    --panel: #001E26; --band: #002F3B; --line: #0d3d48; --muted: #a9bcc0;
+  }
+}
+:root[data-theme='dark'] {
+  --bg: var(--fp-slate); --ink: #FFFFFF; --accent: var(--fp-light-green); --accent-2: var(--fp-light-green);
+  --panel: #001E26; --band: #002F3B; --line: #0d3d48; --muted: #a9bcc0;
+}
