@@ -94,6 +94,7 @@ export const siteStage: Stage = {
       (window as any).__paintAddr?.();
     };
     mv.onPick = at => { clicks.push(at); resnap(); };
+    if (path.length > 1 && !seg.address) locate(path);   // segments drawn before the address lookup existed
     mv.setMarks(clicks);
     show(path);
 

@@ -3,7 +3,7 @@ import { live, repaintNav, type Stage } from './index';
 import { project } from '../lib/project';
 import { engine, outputsStore } from '../lib/engine';
 import { head, task, more, esc } from './ui';
-import { aerialOf, type LngLat } from '../lib/providers';
+import { aerialOf, reverseAddress, type LngLat } from '../lib/providers';
 
 const want = { cover: true, render: true, cost: true, zip: true };
 let method = 'default';
@@ -56,6 +56,7 @@ export const buildStage: Stage = {
       // only the alternatives switched on go into the outputs
       const pf = structuredClone(project.get()); pf.segments.forEach(g => { g.alternatives = g.alternatives.filter(a => a.enabled !== false); });
       const say = (t: string) => { log.push(t); if (gen === live.gen) paint(); };
+      if (want.cover && inputs[0][0] && !seg.address) { const a = await reverseAddress(((seg.path ?? []) as LngLat[])[Math.floor((seg.path?.length ?? 1) / 2)]); if (a) project.update(() => { seg.address = a.address; if (!seg.city) seg.city = a.city; }); }
       if (want.cover && inputs[0][0]) {
         say('Cover sheet: getting the aerial and laying out…');
         try {
