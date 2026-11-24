@@ -4,7 +4,7 @@ import type { Section, SectionElement, Direction } from './types';
 import type { LngLat } from './providers';
 
 type Tags = Record<string, string>;
-export interface Guess { section: Section; street: string; cls: string; tags: Tags; notes: string[] }
+export interface Guess { section: Section; street: string; cls: string; tags: Tags; notes: string[]; sidewalks: { L: boolean; R: boolean } }
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
@@ -30,7 +30,7 @@ export async function guessExisting(path: LngLat[]): Promise<Guess> {
 
 const isYes = (v?: string) => !!v && !['no', 'none', 'separate'].includes(v);
 
-export function build(cls: string, t: Tags): { section: Section; notes: string[] } {
+export function build(cls: string, t: Tags): { section: Section; notes: string[]; sidewalks: { L: boolean; R: boolean } } {
   const notes: string[] = [];
   const major = ['primary', 'secondary', 'trunk', 'primary_link', 'secondary_link'].includes(cls);
   const laneW = major ? 11 : cls === 'tertiary' ? 11 : 10;
@@ -81,5 +81,5 @@ export function build(cls: string, t: Tags): { section: Section; notes: string[]
     road.forEach(e => { e.width_ft = Math.round(e.width_ft * k * 2) / 2; });
     notes.push(`roadway scaled to tagged width ${Math.round(ft)}'`);
   } else notes.push(`widths are ${major ? 'arterial' : 'local'} defaults; verify in the field or on aerial`);
-  return { section: { elements: els }, notes };
+  return { section: { elements: els }, notes, sidewalks: { L: L.sidewalk, R: R.sidewalk } };
 }

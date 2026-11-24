@@ -8,7 +8,7 @@ import { engine, outputsStore } from '../lib/engine';
 const fileName = () => `${new Date().toISOString().slice(0, 10)}_${(project.get().project.name || 'STREET-CONCEPT').toUpperCase().replace(/\W+/g, '-')}_CONCEPT-SHEETS.pdf`;
 
 export const sheetsStage: Stage = {
-  id: 'sheets', name: 'Sheets',
+  id: 'sheets', name: 'Review',
   async render(side, canvas) {
     const gen = live.gen, seg = project.seg();
     if (await engine.check()) {
@@ -17,9 +17,9 @@ export const sheetsStage: Stage = {
       if (gen !== live.gen) return;
       const pf = project.get();
       let shown = list.length - 1;
-      side.innerHTML = `${head(6, 'Sheets', 'Read the PDFs, then mark them up for revisions or approve them.')}
-        ${task(1, 'Read the sheets', list.length ? 'now' : 'later', list.length ? `<ul class="filelist">${list.map((f, i) => `<li><button class="linkbtn" data-i="${i}">${esc(f.name)}</button><a class="note" target="_blank" rel="noopener" href="${engine.abs(f.url)}">open in new tab</a></li>`).join('')}</ul>` :
-          `<p class="note">Nothing yet. Build the one-pager in <a href="#cost">Cost</a>, and render the concepts in <a href="#visualize">Render</a>.</p>`)}
+      side.innerHTML = `${head(6, 'Review', 'Every output from the build. Read them, then mark them up for revisions or approve them.')}
+        ${task(1, 'Read the outputs', list.length ? 'now' : 'later', list.length ? `<ul class="filelist">${list.map((f, i) => `<li><button class="linkbtn" data-i="${i}">${esc(f.name)}</button><a class="note" target="_blank" rel="noopener" href="${engine.abs(f.url)}">open in new tab</a></li>`).join('')}</ul>` :
+          `<p class="note">Nothing built yet. Go to <a href="#build">Build</a>.</p>`)}
         ${task(2, 'Mark up or approve', list.length ? 'now' : 'later', `
           <p class="note">Opens the markup viewer on every sheet: draw callouts, clouds and boxes, then press <b>Send</b> for revisions, or <b>Approved</b>.</p>
           <div class="row"><button class="btn" id="open"${list.length ? '' : ' disabled'}>Open markup viewer</button></div>`)}
@@ -40,7 +40,7 @@ export const sheetsStage: Stage = {
       return;
     }
     const missing = [!seg.length_ft && 'segment length (Site)', !seg.keymap && 'key map (Site, Save key map)', !seg.alternatives.length && 'alternatives', !seg.alternatives.some(a => a.render) && 'concept renderings (Visualize)'].filter(Boolean);
-    side.innerHTML = `${head(6, 'Sheets', 'Build, read and download the concept sheets.')}
+    side.innerHTML = `${head(6, 'Review', 'Build, read and download the concept sheets.')}
       <p>11x17 landscape concept sheets: overview with key map, existing section and cost summary, then one sheet per alternative.</p>
       <div class="row"><button class="btn" id="build">Build sheets</button><button class="btn ghost" id="dl" disabled>Download PDF</button></div>
       ${missing.length ? `<div class="srcbar">Optional inputs not yet set: ${missing.join(', ')}. Sheets build without them.</div>` : ''}

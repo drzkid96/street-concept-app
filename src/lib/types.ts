@@ -36,6 +36,9 @@ export interface Segment {
   curbs: unknown[];
   existing: Section;
   existingChecked?: boolean;
+  city?: string; // sets the regional prices
+  settingPinned?: boolean; // frontage chosen by the person; otherwise read from OSM land use
+  setting?: string; // drawing surroundings and cost setting (fp-section-builder scene, or 'park')
   existingAuto?: import('./existingAuto').AutoResult; // how the existing section was filled (OSM + photo check)
   alternatives: Alternative[];
 }

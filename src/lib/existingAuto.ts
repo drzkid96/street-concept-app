@@ -6,6 +6,7 @@ import { guessExisting } from './osmGuess';
 import { streetImage, bearing, type LngLat } from './providers';
 import { engine } from './engine';
 import type { Section, SectionElement } from './types';
+import { sceneFromLandUse, applyFrontage } from './scenes';
 
 export interface PhotoLine { x_ft: number; color: 'white' | 'yellow'; pattern: 'solid' | 'dashed'; strength: number }
 export interface PhotoCheck { ok: boolean; reason?: string; quality?: number; curbs?: { L?: { x_ft: number; conf: number }; R?: { x_ft: number; conf: number } }; lines?: PhotoLine[]; curb_to_curb_ft?: number; width_conf?: number }
@@ -16,6 +17,7 @@ export interface AutoResult {
   photo: { used: boolean; summary: string; source?: string; weight: number } ;
   agree: string; flags: string[]; changes: WidthChange[];
   section: Section;
+  scene: string; sceneWhy: string; sidewalks: { L: boolean; R: boolean };
   photoSrc?: { src: string; source: string; credit: string; link?: string; heading?: number };
 }
 
@@ -104,9 +106,10 @@ async function photoFor(path: LngLat[]) {
   return img;
 }
 
-export async function autoExisting(path: LngLat[], onStep: (t: string) => void): Promise<AutoResult> {
-  onStep('Reading OpenStreetMap and fetching the Street View photo…');
-  const [g, img] = await Promise.all([guessExisting(path), photoFor(path)]);
+export async function autoExisting(path: LngLat[], onStep: (t: string) => void, pinned?: string): Promise<AutoResult> {
+  onStep('Reading OpenStreetMap streets and land use, and fetching the Street View photo…');
+  const [g, img, land] = await Promise.all([guessExisting(path), photoFor(path), pinned ? Promise.resolve({ scene: pinned, why: 'your choice in Site' }) : sceneFromLandUse(path)]);
+  applyFrontage(g.section, land.scene, g.sidewalks);
   const widthTagged = !!parseFloat(g.tags.width || '');
   const oneway = g.tags.oneway === 'yes';
   let pc: PhotoCheck | null = null;
@@ -125,6 +128,7 @@ export async function autoExisting(path: LngLat[], onStep: (t: string) => void):
     osm: { street: g.street, cls: g.cls, notes: g.notes, widthTagged, summary: osmSummary(g.section, oneway) },
     photo: { used: b.used, summary: img ? b.summary : 'Not used: no Street View at the start of the segment.', source: img ? `${img.source}, ${img.credit}` : undefined, weight: b.used ? Math.round(100 * W_PHOTO * (b.conf ?? 0) / ((widthTagged ? W_OSM_TAGGED : W_OSM) + W_PHOTO * (b.conf ?? 0))) : 0 },
     agree: b.agree, flags: b.flags, changes: b.changes, section: b.sec,
+    scene: land.scene, sceneWhy: land.why, sidewalks: g.sidewalks,
     photoSrc: img ? { src: img.src, source: img.source, credit: img.credit, link: img.link, heading: img.heading } : undefined
   };
 }

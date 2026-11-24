@@ -3,6 +3,7 @@ import { project } from '../lib/project';
 import { MapView } from '../lib/mapView';
 import { BASEMAPS, settings, saveSettings, geocode, snap, elevationFt, lengthFt, bearing, type LngLat } from '../lib/providers';
 import { head, task, more, esc } from './ui';
+import { SCENES } from '../lib/scenes';
 
 const opt = (v: string, label: string, cur: string) => `<option value="${v}"${v === cur ? ' selected' : ''}>${label}</option>`;
 
@@ -23,6 +24,12 @@ export const siteStage: Stage = {
         <p class="note">Click on the map where the segment <b>starts</b>, then where it <b>ends</b>. The line follows the street. Click again to extend it.</p>
         <div class="row"><button class="btn ghost" id="undo">Undo last click</button><button class="btn ghost" id="clear">Start over</button></div>
         <dl class="facts"><div><dt>Length</dt><dd id="len">—</dd></div><div><dt>Grade</dt><dd id="grade">—</dd></div></dl>`)}
+      ${task(3, 'Describe the setting', has ? 'now' : 'later', `
+        <div class="field"><label for="city">City (sets the regional prices)</label><input id="city" value="${esc(seg.city ?? 'Los Angeles')}"></div>
+        <div class="field"><label for="scene">Frontage (what lines the street)</label><select id="scene">
+          <option value=""${seg.settingPinned ? '' : ' selected'}>Automatic: read OpenStreetMap land use nearby</option>
+          ${SCENES.map(([v, l]) => `<option value="${v}"${seg.settingPinned && v === seg.setting ? ' selected' : ''}>${l}</option>`).join('')}</select>
+          <span class="note">Sets the buildings, sidewalks and scenery in the drawings, and the cost complexity. With no clear land use it is LA residential with sidewalks.</span></div>`)}
       ${more(`
         <div class="field"><label for="from">Street name (for sheet titles)</label><input id="from" value="${esc(seg.limits.from)}"></div>
         <div class="field"><label for="to">Limits (for example "Los Feliz Blvd to Riverside Dr")</label><input id="to" value="${esc(seg.limits.to)}"></div>
@@ -88,6 +95,12 @@ export const siteStage: Stage = {
     $('#bm').addEventListener('change', e => mv.setBasemap((e.target as HTMLSelectElement).value));
     $('#geo').addEventListener('change', e => { settings.geocoder = (e.target as HTMLSelectElement).value as typeof settings.geocoder; saveSettings(); });
     $('#snapP').addEventListener('change', e => { settings.snap = (e.target as HTMLSelectElement).value as typeof settings.snap; saveSettings(); if (clicks.length > 1) resnap(); });
+    $('#city').addEventListener('change', e => project.update(() => { seg.city = (e.target as HTMLInputElement).value.trim() || 'Los Angeles'; }));
+    $('#scene').addEventListener('change', e => project.update(() => {
+      const v = (e.target as HTMLSelectElement).value;
+      seg.settingPinned = !!v;
+      if (v) seg.setting = v; else delete seg.existingAuto;   // automatic: the next Existing fill reads land use again
+    }));
     (['from', 'to'] as const).forEach(k => $('#' + k).addEventListener('change', e => project.update(() => { seg.limits[k] = (e.target as HTMLInputElement).value; })));
 
     $('#sf').addEventListener('submit', async e => {

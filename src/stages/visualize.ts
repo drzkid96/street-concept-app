@@ -28,24 +28,23 @@ const LOOK = ['north', 'east', 'south', 'west'];
 const opt = (v: string, label: string, cur: string) => `<option value="${v}"${v === cur ? ' selected' : ''}>${label}</option>`;
 let curbChoice: 'manual' | 'ai' = 'manual';
 let changing = false;
-let rendering = false;
 
 export const visualizeStage: Stage = {
-  id: 'visualize', name: 'Render',
-  done: () => !!outputsStore.streetview,
+  id: 'visualize', name: 'Photo & curbs',
+  done: () => !!outputsStore.curbs?.approved,
   async render(side, canvas) {
     const gen = live.gen;
-    if (!engine.on) { side.innerHTML = head(5, 'Render', 'Connecting to the engine…'); await engine.check(); if (gen !== live.gen) return; }
+    if (!engine.on) { side.innerHTML = head(4, 'Photo and curbs', 'Connecting to the engine…'); await engine.check(); if (gen !== live.gen) return; }
     const seg: Segment = project.seg();
     const p: Perspective | undefined = seg.perspective;
     const road = seg.existing.elements.filter(e => !['sidewalk', 'parkway', 'curb'].includes(e.type)).reduce((a, e) => a + e.width_ft, 0) || 40;
     const heading = seg.location?.heading ?? p?.heading ?? 0;
-    let look = LOOK[Math.round(heading / 90) % 4];
+    let look = outputsStore.look ?? LOOK[Math.round(heading / 90) % 4];
     const cb = () => (outputsStore.curbs && p && outputsStore.curbs.photo === p.src) ? outputsStore.curbs : undefined;
     let msgText = '';
 
     if (!engine.on) {
-      side.innerHTML = `${head(5, 'Render', 'Puts each alternative onto a street photo.')}<p class="badge warn">The rendering engine is not responding.</p><div class="row"><button class="btn" id="retry">Try again</button></div>`;
+      side.innerHTML = `${head(4, 'Photo and curbs', 'The photo the concepts are rendered on.')}<p class="badge warn">The rendering engine is not responding.</p><div class="row"><button class="btn" id="retry">Try again</button></div>`;
       side.querySelector('#retry')!.addEventListener('click', async () => { await engine.check(); visualizeStage.render(side, canvas); });
       canvas.innerHTML = '<div class="empty">Waiting for the engine.</div>';
       return;
@@ -55,8 +54,8 @@ export const visualizeStage: Stage = {
     const paint = () => {
       const keepOpen = (side.querySelector('details.more') as HTMLDetailsElement | null)?.open;
       const c = cb(), st = c?.status, approved = !!c?.approved;
-      const s1 = p ? 'done' : 'now', s2 = !p ? 'later' : approved ? 'done' : 'now', s3 = !approved ? 'later' : outputsStore.streetview ? 'done' : 'now';
-      side.innerHTML = `${head(5, 'Render', 'Puts each alternative onto a street photo. Three steps: choose a photo, mark the curbs, render.')}
+      const s1 = p ? 'done' : 'now', s2 = !p ? 'later' : approved ? 'done' : 'now';
+      side.innerHTML = `${head(4, 'Photo and curbs', 'The street photo the concepts are rendered on, and its curb lines. Nothing is built yet: that happens in Build.')}
         ${task(1, 'Choose a photo', s1, p && !changing ? `
           <div class="mini"><img src="${esc(p.src)}" alt="Selected photo"><div><span class="note">${esc(p.source)}${p.credit ? ' · ' + esc(p.credit) : ''}</span><br><button class="linkbtn" id="chg">Change photo</button></div></div>` : `
           <div class="row"><button class="btn" id="sv">Use Street View</button><label class="btn ghost">Upload a photo<input id="file" type="file" accept="image/*" hidden></label>${p ? '<button class="linkbtn" id="keep">Keep the current photo</button>' : ''}</div>
@@ -69,10 +68,6 @@ export const visualizeStage: Stage = {
           </fieldset>
           <div class="field"><label for="w">Curb-to-curb width (ft)</label><input id="w" type="number" min="12" max="160" step="0.5" value="${road}"></div>
           <div class="row"><button class="btn" id="start">${curbChoice === 'ai' ? 'Find curbs with AI' : 'Start marking'}</button></div>` : curbPanel(c, st, approved))}
-        ${task(3, 'Render the concepts', s3, `
-          <p class="note">${approved ? `Renders ${seg.alternatives.length} alternative${seg.alternatives.length === 1 ? '' : 's'} on the photo and builds the concept sheet PDF. Takes a few minutes.` : 'Available once the curbs are approved.'}</p>
-          <div class="row"><button class="btn" id="render"${approved && !rendering && seg.alternatives.length ? '' : ' disabled'}>${rendering ? 'Rendering…' : outputsStore.streetview ? 'Render again' : 'Render concepts'}</button></div>
-          ${outputsStore.streetview ? `<div class="row">${outputsStore.streetview.pdfs.map(f => `<a class="btn ghost" target="_blank" rel="noopener" href="${engine.abs(f.url)}">Open ${esc(f.name)}</a>`).join('')}</div>` : ''}`)}
         ${more(`
           <div class="field"><label for="src">Street View source</label><select id="src">${opt('google', 'Google Street View', settings.street)}${opt('panoramax', 'Panoramax (open data)', settings.street)}${opt('mapillary', 'Mapillary (needs a token)', settings.street)}</select></div>
           <div class="field" id="mlyWrap"${settings.street === 'mapillary' ? '' : ' hidden'}><label for="mly">Mapillary access token</label><input id="mly" type="password" autocomplete="off" value="${esc(settings.mapillaryToken)}"></div>
@@ -83,7 +78,7 @@ export const visualizeStage: Stage = {
     };
 
     function curbPanel(c: NonNullable<ReturnType<typeof cb>>, st: CurbStatus | undefined, approved: boolean) {
-      if (approved) return `<p class="okline">Curbs approved.</p><div class="row"><button class="btn ghost" id="edit">Change the curbs</button></div>`;
+      if (approved) return `<p class="okline">Curbs approved. Next: Build.</p><div class="row"><button class="btn ghost" id="edit">Change the curbs</button></div>`;
       const s = st ?? { hz: false, L: 0, R: 0, Lai: 0, Rai: 0, done: false };
       const allAi = (s.Lai + s.Rai) > 0 && s.Lai === s.L && s.Rai === s.R;
       const missing = [!s.hz && 'the horizon', s.L < 2 && 'the left curb', s.R < 2 && 'the right curb'].filter(Boolean) as string[];
@@ -110,9 +105,7 @@ export const visualizeStage: Stage = {
     // ---------- canvas
     const showCanvas = () => {
       const c = cb();
-      if (outputsStore.streetview && c?.approved && !rendering && outputsStore.streetview.renders.length) {
-        canvas.innerHTML = `<div class="persp-wrap">${outputsStore.streetview.renders.map(f => `<figure class="persp"><img src="${engine.abs(f.url)}" alt="${esc(f.name)}"><figcaption>${esc(f.name)}</figcaption></figure>`).join('')}</div>`;
-      } else if (c) {
+      if (c) {
         const f = canvas.querySelector('iframe.guide') as HTMLIFrameElement | null;
         if (!f || f.dataset.job !== c.job) canvas.innerHTML = `<iframe class="guide" data-job="${esc(c.job)}" title="Curb marking" src="${engine.abs(c.guide)}"></iframe>`;
       } else if (p) {
@@ -170,22 +163,7 @@ export const visualizeStage: Stage = {
       $('#restart')?.addEventListener('click', () => { outputsStore.curbs = undefined; outputsStore.streetview = undefined; msgText = ''; paint(); showCanvas(); repaintNav(); });
       $('#src')?.addEventListener('change', e => { settings.street = (e.target as HTMLSelectElement).value as typeof settings.street; saveSettings(); const w = $('#mlyWrap'); if (w) w.hidden = settings.street !== 'mapillary'; });
       $('#mly')?.addEventListener('change', e => { settings.mapillaryToken = (e.target as HTMLInputElement).value.trim(); saveSettings(); });
-      $('#look')?.addEventListener('change', e => { look = (e.target as HTMLSelectElement).value; });
-      $('#render')?.addEventListener('click', render);
-    }
-
-    async function render() {
-      const c = cb(); if (!c?.approved) return;
-      rendering = true; msgText = 'Rendering: solving the curbs, removing parked cars, placing FP assets, building the sheet. This takes a few minutes.'; paint();
-      try {
-        const pf = project.get();
-        const r = await engine.json('/api/streetview/run', { job: c.job, project: pf, street: seg.limits.from || pf.project.name, looking: look, title: pf.project.name });
-        rendering = false;
-        if (gen !== live.gen) return;
-        if (!r.ok) { msgText = 'The renderer stopped at ' + ((r.steps || []).find((s: any) => !s[1]) || ['a step'])[0] + '. ' + String(r.log || '').split('\n').slice(-3).join(' '); paint(); return; }
-        outputsStore.streetview = { job: r.job, pdfs: r.pdfs, renders: r.files.filter((f: any) => /_T\d+\.png$/.test(f.name)) };
-        msgText = 'Done. Next: Sheets, to read and mark up the PDFs.'; paint(); showCanvas(); repaintNav();
-      } catch (err) { rendering = false; msgText = (err as Error).message; paint(); }
+      $('#look')?.addEventListener('change', e => { look = (e.target as HTMLSelectElement).value; outputsStore.look = look; });
     }
 
     // Messages from the Curb Guide bridge (same origin, same job only).
@@ -193,7 +171,7 @@ export const visualizeStage: Stage = {
       const c = cb(), d = ev.data;
       if (!c || !d || d.job !== c.job) return;
       if (d.type === 'curbs-status') { const { type, job, ...s } = d; void type; void job; c.status = s as CurbStatus; if (!c.approved) paint(); }
-      else if (d.type === 'curbs-approved') { c.approved = true; msgText = 'Curbs approved. Next: render the concepts.'; paint(); repaintNav(); }
+      else if (d.type === 'curbs-approved') { c.approved = true; msgText = 'Curbs approved. All inputs for the renderings are in. Next: Build.'; paint(); repaintNav(); }
       else if (d.type === 'curbs-error') { msgText = d.text; paint(); }
     };
     window.addEventListener('message', onMsg);

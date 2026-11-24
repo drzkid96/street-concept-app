@@ -1,13 +1,15 @@
 import { project, uid } from '../lib/project';
-import { sectionSvg } from '../lib/sectionSvg';
 import { sectionEditor } from './sectionEditor';
 import { siteStage } from './site';
-import { costStage } from './cost';
+import { buildStage } from './build';
 import { sheetsStage } from './sheets';
 import { autoExisting, pathKey, type AutoResult } from '../lib/existingAuto';
 import type { LngLat } from '../lib/providers';
 import { visualizeStage } from './visualize';
 import { head, task, esc } from './ui';
+import { showSections } from '../lib/sectionView';
+import { conformTo } from '../lib/roadway';
+import { SCENES, DEFAULT_SCENE, applyFrontage } from '../lib/scenes';
 import type { Alternative } from '../lib/types';
 
 export interface Stage { id: string; name: string; done?: () => boolean; render(side: HTMLElement, canvas: HTMLElement): void | Promise<void>; dispose?: () => void }
@@ -42,22 +44,27 @@ const existing: Stage = {
     side.innerHTML = `${head(2, 'Existing street', 'The street as it is today. Filled in for you from OpenStreetMap, checked against the Street View photo.')}
       ${task(1, 'Filled automatically', !has ? 'later' : stale ? 'now' : 'done', !has ? '<p class="note">Mark the segment in <a href="#site">Site</a> first.</p>' : stale ? '<p class="note" id="prog">Starting…</p>' : a ? sources(a) : '<p class="note">You entered and confirmed this section yourself.</p><div class="row"><button class="linkbtn" id="again">Fill again from OpenStreetMap and the photo</button></div>')}
       ${task(2, 'Check it and fix anything wrong', seg.existingChecked ? 'done' : stale ? 'later' : 'now', `
-        <p class="note">OpenStreetMap rarely has widths or parking. Fix anything that does not match the street, then confirm.</p>
+        <p class="note">Only the roadway between the curbs is edited. OpenStreetMap rarely has widths or parking: fix anything that does not match the street, then confirm.</p>
+        <p class="note">Frontage: <b>${esc(SCENES.find(x => x[0] === (seg.setting || DEFAULT_SCENE))?.[1] ?? 'LA residential')}</b>${a?.sceneWhy ? `, from ${esc(a.sceneWhy)}` : ''}. Change it in <a href="#site">Site</a>. Sidewalks follow the frontage: commercial gets a full sidewalk to the building, never a planting strip.</p>
+
         <div id="ed"></div>
         <label class="check-row"><input type="checkbox" id="ok"${seg.existingChecked ? ' checked' : ''}${stale ? ' disabled' : ''}> This matches the street today</label>`)}`;
-    const draw = () => { canvas.innerHTML = sectionSvg(seg.existing, `${seg.limits.from || 'Segment'} existing`); };
-    sectionEditor(side.querySelector('#ed') as HTMLElement, seg.existing, () => { project.update(() => {}); draw(); });
+    if (!stale && seg.settingPinned && a && a.scene !== seg.setting) project.update(() => { applyFrontage(seg.existing, seg.setting, a.sidewalks); a.scene = seg.setting!; a.sceneWhy = 'your choice in Site'; seg.alternatives.forEach(x => conformTo(x.section, seg.existing)); });
+    const draw = () => showSections(canvas, [{ id: 'ex', title: `${seg.limits.from || 'Segment'}: existing`, section: seg.existing, existing: true }], seg.setting);
+    sectionEditor(side.querySelector('#ed') as HTMLElement, seg.existing, () => { project.update(() => { seg.alternatives.forEach(x => conformTo(x.section, seg.existing)); }); draw(); }, { existing: true });
     side.querySelector('#ok')!.addEventListener('change', e => { project.update(() => { seg.existingChecked = (e.target as HTMLInputElement).checked; }); repaintNav(); existing.render(side, canvas); });
     side.querySelector('#again')?.addEventListener('click', () => { project.update(() => { delete seg.existingAuto; seg.existingChecked = false; }); existing.render(side, canvas); });
     draw();
     if (stale && autoRunning !== key) {
       autoRunning = key;
       const prog = (t: string) => { const el = side.querySelector('#prog'); if (el && gen === live.gen) el.textContent = t; };
-      autoExisting(path, prog).then(r => {
+      autoExisting(path, prog, seg.settingPinned ? seg.setting : undefined).then(r => {
         autoRunning = '';
         project.update(() => {
           seg.existing = r.section; seg.existingAuto = r; seg.existingChecked = false;
           if (!seg.limits.from) seg.limits.from = r.osm.street;
+          seg.setting = r.scene;
+          seg.alternatives.forEach(x => conformTo(x.section, r.section));
           if (!seg.perspective && r.photoSrc) seg.perspective = r.photoSrc;   // the same photo starts the Render step
         });
         repaintNav();
@@ -80,7 +87,7 @@ const alts: Stage = {
         <button class="chip add" id="dup">+ New alternative</button></div>
       ${a ? `<div class="field"><label for="nm">Name</label><input id="nm" value="${esc(a.name)}"></div>
       <div class="field"><label for="tier">Delivery</label><select id="tier"><option value="quick-build">Quick-build (paint and posts)</option><option value="interim">Interim</option><option value="capital">Capital (concrete)</option></select></div>
-      <p class="note">Change element types and widths. The total stays visible below the table.</p>
+      <p class="note">Change the roadway between the curbs. The curbs and everything outside them stay as they are today.</p>
       <div id="ed"></div>
       <div class="row"><button class="btn ghost danger" id="del">Delete this alternative</button></div>` : '<p class="note">No alternatives yet. Press <b>+ New alternative</b> to start from the existing street.</p>'}`;
     side.querySelector('#dup')!.addEventListener('click', () => {
@@ -89,16 +96,17 @@ const alts: Stage = {
       altIdx = seg.alternatives.length - 1; repaintNav(); alts.render(side, canvas);
     });
     side.querySelectorAll<HTMLElement>('.chip[data-i]').forEach(b => b.addEventListener('click', () => { altIdx = +b.dataset.i!; alts.render(side, canvas); }));
-    if (!a) { canvas.innerHTML = sectionSvg(seg.existing, 'Existing'); return; }
+    if (!a) { showSections(canvas, [{ id: 'ex', title: 'Existing', section: seg.existing, existing: true }], seg.setting); return; }
+    conformTo(a.section, seg.existing);
     (side.querySelector('#tier') as HTMLSelectElement).value = a.tier;
     side.querySelector('#nm')!.addEventListener('change', e => { project.update(() => { a.name = (e.target as HTMLInputElement).value || a.name; }); alts.render(side, canvas); });
     side.querySelector('#tier')!.addEventListener('change', e => { project.update(() => { a.tier = (e.target as HTMLSelectElement).value as Alternative['tier']; }); });
     side.querySelector('#del')!.addEventListener('click', e => { const b = e.currentTarget as HTMLButtonElement; if (!b.dataset.arm) { b.dataset.arm = '1'; b.textContent = 'Click again to delete'; return; } project.update(() => { seg.alternatives.splice(altIdx, 1); }); altIdx = Math.max(0, altIdx - 1); repaintNav(); alts.render(side, canvas); });
-    const draw = () => { canvas.innerHTML = sectionSvg(seg.existing, 'Existing') + sectionSvg(a.section, a.name); };
-    sectionEditor(side.querySelector('#ed') as HTMLElement, a.section, () => { project.update(() => {}); draw(); });
+    const draw = () => showSections(canvas, [{ id: 'ex', title: 'Existing', section: seg.existing, existing: true }, { id: 'alt', title: a.name, section: a.section }], seg.setting);
+    sectionEditor(side.querySelector('#ed') as HTMLElement, a.section, () => { project.update(() => {}); draw(); }, { existing: false });
     draw();
   }
 };
 
 
-export const STAGES: Stage[] = [site, existing, alts, costStage, visualizeStage, sheetsStage];
+export const STAGES: Stage[] = [site, existing, alts, visualizeStage, buildStage, sheetsStage];

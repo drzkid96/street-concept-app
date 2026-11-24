@@ -3,6 +3,7 @@ import { project } from '../lib/project';
 import { engine, outputsStore } from '../lib/engine';
 import { live, repaintNav } from './index';
 import { head, task, more } from './ui';
+import { SCENES } from '../lib/scenes';
 import { loadKnowledge, importKnowledge, forgetKnowledge, priceConcept, waterfall, money, type Line, type Knowledge } from '../lib/cost';
 
 const esc = (t: string) => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
@@ -69,18 +70,17 @@ export const costStage: Stage = {
 };
 
 // ---------------------------------------------------------------- engine: fp-section-builder (cost/run.py), unchanged
-const SETTINGS: [string, string][] = [['la-residential', 'LA residential street'], ['la-neighborhood', 'LA neighborhood corridor'], ['la-commercial', 'LA commercial corridor'], ['la-core', 'LA downtown'],
-  ['socal-suburban', 'Suburban road or park road'], ['main-street', 'Main street'], ['coastal', 'Coastal'], ['desert', 'Desert'], ['san-diego', 'San Diego'],
-  ['sf-residential', 'SF residential'], ['sf-commercial', 'SF commercial'], ['sf-core', 'SF downtown'], ['bay-suburban', 'Bay Area suburban']];
+const SETTINGS = SCENES;
 const ENG = { city: 'Los Angeles', setting: 'la-commercial', mode: 'default' };
 
 async function engineCost(side: HTMLElement, canvas: HTMLElement) {
   const gen = live.gen, seg = project.seg();
+  if (seg.setting) ENG.setting = seg.setting;
   const built = !!outputsStore.concepts, ready = seg.alternatives.length > 0;
   side.innerHTML = `${head(4, 'Cost', 'Prices every alternative and builds the 11x17 concepts and cost one-pager.')}
     ${task(1, 'Describe the setting', built ? 'done' : 'now', `
       <div class="field"><label for="city">City (sets regional prices)</label><input id="city" value="${esc(ENG.city)}"></div>
-      <div class="field"><label for="setting">Kind of street (sets the scenery and complexity)</label><select id="setting">${SETTINGS.map(([v, l]) => `<option value="${v}"${v === ENG.setting ? ' selected' : ''}>${l}</option>`).join('')}</select></div>
+      <div class="field"><label for="setting">Surroundings (scenery and cost complexity)</label><select id="setting">${SETTINGS.map(([v, l]) => `<option value="${v}"${v === ENG.setting ? ' selected' : ''}>${l}</option>`).join('')}</select></div>
       ${more(`<div class="field"><label for="mode">Pricing method</label><select id="mode"><option value="default">Delivery tiers, quick-build to capital (default)</option><option value="atp"${ENG.mode === 'atp' ? ' selected' : ''}>Caltrans ATP method</option></select></div>`)}`)}
     ${task(2, 'Build the one-pager', built ? 'done' : ready ? 'now' : 'later', `
       ${ready ? '' : '<p class="note">Add an alternative first.</p>'}
@@ -96,7 +96,7 @@ async function engineCost(side: HTMLElement, canvas: HTMLElement) {
       ${o.png ? `<img src="${engine.abs(o.png)}" alt="Concepts and cost one-pager" style="width:100%;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.12)">` : ''}
       <div class="srcbar">${o.summary.map(esc).join('<br>')}</div></div>`;
   };
-  ['#city', '#setting', '#mode'].forEach(q => $(q).addEventListener('change', () => { ENG.city = $('#city').value.trim(); ENG.setting = $('#setting').value; ENG.mode = $('#mode').value; }));
+  ['#city', '#setting', '#mode'].forEach(q => $(q).addEventListener('change', () => { ENG.city = $('#city').value.trim(); ENG.setting = $('#setting').value; ENG.mode = $('#mode').value; project.update(() => { seg.setting = ENG.setting; }); }));
   $('#run').addEventListener('click', async () => {
     ENG.city = $('#city').value.trim(); ENG.setting = $('#setting').value; ENG.mode = $('#mode').value;
     msg('Building…'); ($('#run') as unknown as HTMLButtonElement).disabled = true;
