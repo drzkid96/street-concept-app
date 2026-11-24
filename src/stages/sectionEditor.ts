@@ -4,6 +4,8 @@ import { split, curbToCurb, roadsideLabel, setWidth, addElement, removeElement, 
 
 const ROAD_TYPES = (Object.keys(ELEMENTS) as ElementType[]).filter(t => !['sidewalk', 'parkway', 'curb'].includes(t));
 const DIRS: Direction[] = ['none', 'inbound', 'outbound', 'both'];
+const LINES: [string, string][] = [['', 'Automatic'], ['none', 'No line'], ['white-dashed', 'White dashed'], ['white-solid', 'White solid'], ['white-wide', 'White wide (12 in)'], ['white-double', 'White double'], ['yellow-solid', 'Yellow solid'], ['yellow-dashed', 'Yellow dashed'], ['yellow-double', 'Double yellow']];
+const lineSel = (i: number, side: 'L' | 'R', cur: string | undefined, label: string) => `<tr class="linerow" data-i="${i}"><td colspan="4"><span>${label}</span><select data-k="line${side}" aria-label="${label}">${LINES.map(([v, l]) => `<option value="${v}"${v === (cur ?? '') ? ' selected' : ''}>${l}</option>`).join('')}</select></td></tr>`;
 const DIR_LABEL: Record<Direction, string> = { none: '–', inbound: 'In', outbound: 'Out', both: 'Both' };
 
 // Roadway editor: only the elements between the curbs. Curb to curb is fixed (Existing may set the measured value).
@@ -20,14 +22,14 @@ export function sectionEditor(host: HTMLElement, sec: Section, onChange: () => v
         <tbody>${road.map((e, i) => {
           const L = limitsFor(road, e);
           const hint = L.pref && (e.width_ft < L.pref[0] || e.width_ft > L.pref[1]) ? `<span class="badge warn">${L.label}: preferred ${L.pref[0]}${L.pref[1] !== L.pref[0] ? '–' + L.pref[1] : ''} ft</span>` : '';
-          return `<tr data-i="${i}">
+          return `${i === 0 ? lineSel(0, 'L', e.lineLeft, 'Line at left curb') : ''}<tr data-i="${i}">
             <td><select data-k="type" aria-label="Element">${ROAD_TYPES.map(t => `<option value="${t}"${t === e.type ? ' selected' : ''}>${ELEMENTS[t].label}</option>`).join('')}</select>
               ${MATERIALS[e.type] ? `<select data-k="material" aria-label="Option" style="margin-top:.25rem">${MATERIALS[e.type]!.map(([v, l]) => `<option value="${v}"${v === materialOf(e.type, e.material) ? ' selected' : ''}>${l}</option>`).join('')}</select>` : ''}
               ${hint}</td>
             <td class="num"><input data-k="width_ft" type="number" min="${L.min}" max="${L.max}" step="0.5" value="${e.width_ft}" aria-label="Width" title="${L.label}: ${L.min} to ${L.max} ft"></td>
             <td><select data-k="direction" aria-label="Direction">${DIRS.map(d => `<option value="${d}"${d === e.direction ? ' selected' : ''}>${DIR_LABEL[d]}</option>`).join('')}</select></td>
             <td><button class="btn ghost" data-act="del" aria-label="Remove" style="min-height:32px;padding:.2rem .5rem">×</button></td>
-          </tr>`;
+          </tr>${lineSel(i, 'R', e.lineRight, i === road.length - 1 ? 'Line at right curb' : 'Line between')}`;
         }).join('')}</tbody>
       </table>
       <div class="row addrow"><select id="addT" class="sel" aria-label="Element to add">${ROAD_TYPES.map(t => `<option value="${t}"${t === 'bike_lane' ? ' selected' : ''}>${ELEMENTS[t].label}</option>`).join('')}</select>
@@ -42,7 +44,8 @@ export function sectionEditor(host: HTMLElement, sec: Section, onChange: () => v
     const tr = t.closest('tr[data-i]') as HTMLElement | null;
     if (!tr) return;
     const i = +tr.dataset.i!, el = split(sec).road[i];
-    const k = t.dataset.k as 'type' | 'width_ft' | 'direction' | 'material';
+    const k = t.dataset.k as 'type' | 'width_ft' | 'direction' | 'material' | 'lineL' | 'lineR';
+    if (k === 'lineL' || k === 'lineR') { act(() => { if (k === 'lineL') el.lineLeft = t.value || undefined; else el.lineRight = t.value || undefined; return ''; }); return; }
     if (k === 'width_ft') act(() => setWidth(sec, i, parseFloat(t.value) || 0));
     else act(() => {
       if (k === 'type') { el.type = t.value as ElementType; el.material = materialOf(el.type); }

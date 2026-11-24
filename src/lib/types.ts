@@ -10,6 +10,8 @@ export interface SectionElement {
   direction: Direction;
   material?: string;
   std_ref?: string;
+  lineLeft?: string;  // line at this element's left edge (first element: at the left curb)
+  lineRight?: string; // line at this element's right edge; unset = automatic
 }
 
 export interface Section { elements: SectionElement[] }

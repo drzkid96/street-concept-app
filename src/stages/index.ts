@@ -49,7 +49,8 @@ const existing: Stage = {
       ${task(1, 'Filled automatically', !has ? 'later' : stale ? 'now' : 'done', !has ? '<p class="note">Mark the segment in <a href="#site">Site</a> first.</p>' : stale ? '<p class="note" id="prog">Starting…</p>' : a ? sources(a) : '<p class="note">You entered and confirmed this section yourself.</p><div class="row"><button class="linkbtn" id="again">Fill again from OpenStreetMap and the photo</button></div>')}
       ${task(2, 'Check it and fix anything wrong', seg.existingChecked ? 'done' : stale ? 'later' : 'now', `
         <p class="note">Only the roadway between the curbs is edited. OpenStreetMap rarely has widths or parking: fix anything that does not match the street, then confirm.</p>
-        <p class="note">Frontage: <b>${esc(SCENES.find(x => x[0] === (seg.setting || DEFAULT_SCENE))?.[1] ?? 'LA residential')}</b>${a?.sceneWhy ? `, from ${esc(a.sceneWhy)}` : ''}. Change it in <a href="#site">Site</a>. Sidewalks follow the frontage: commercial gets a full sidewalk to the building, never a planting strip.</p>
+        <div class="field"><label for="scene">Frontage type</label><select id="scene">${SCENES.map(([v, l]) => `<option value="${v}"${v === (seg.setting || DEFAULT_SCENE) ? ' selected' : ''}>${l}</option>`).join('')}</select>
+          <span class="note">${a?.sceneWhy ? `Picked from ${esc(a.sceneWhy)}. ` : ''}Sidewalks follow the frontage.</span></div>
 
         <div id="ed"></div>
         <label class="check-row"><input type="checkbox" id="ok"${seg.existingChecked ? ' checked' : ''}${stale ? ' disabled' : ''}> This matches the street today</label>`)}`;
@@ -60,6 +61,7 @@ const existing: Stage = {
     const draw = () => showSections(canvas.querySelector('#secHost') as HTMLElement, [{ id: 'ex', title: `${seg.limits.from || 'Segment'}: existing`, section: seg.existing, existing: true }], seg.setting);
     sectionEditor(side.querySelector('#ed') as HTMLElement, seg.existing, () => { project.update(() => { seg.alternatives.forEach(x => conformTo(x.section, seg.existing)); }); draw(); }, { existing: true });
     side.querySelector('#ok')!.addEventListener('change', e => { project.update(() => { seg.existingChecked = (e.target as HTMLInputElement).checked; }); repaintNav(); existing.render(side, canvas); });
+    side.querySelector('#scene')?.addEventListener('change', e => { project.update(() => { seg.setting = (e.target as HTMLSelectElement).value; seg.settingPinned = true; applyFrontage(seg.existing, seg.setting, a?.sidewalks); if (a) { a.scene = seg.setting; a.sceneWhy = 'your choice'; } seg.alternatives.forEach(x => conformTo(x.section, seg.existing)); }); existing.render(side, canvas); });
     side.querySelector('#again')?.addEventListener('click', () => { project.update(() => { delete seg.existingAuto; seg.existingChecked = false; }); existing.render(side, canvas); });
     draw();
     if (stale && autoRunning !== key) {
