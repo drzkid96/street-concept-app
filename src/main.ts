@@ -12,21 +12,25 @@ let current: Stage | null = null;
 const name = document.getElementById('proj-name') as HTMLInputElement;
 
 const stepnav = document.getElementById('stepnav')!;
+// Steps open in order: a step is reachable only when every step before it is complete.
+const reach = () => { const k = STAGES.findIndex(s => !(s.done?.() ?? false)); return k < 0 ? STAGES.length - 1 : k; };
 const paintNav = (id: string) => {
+  const open = reach();
   nav.innerHTML = STAGES.map((s, i) => {
     const done = s.done?.() ?? false;
-    return `<button data-id="${s.id}" aria-current="${s.id === id}" class="${done ? 'done' : ''}"><span class="n">${done ? '✓' : i + 1}</span>${s.name.toUpperCase()}</button>`;
+    return `<button data-id="${s.id}" aria-current="${s.id === id}" class="${done ? 'done' : ''}"${i > open ? ' disabled title="Finish the earlier steps first"' : ''}><span class="n">${done ? '✓' : i + 1}</span>${s.name.toUpperCase()}</button>`;
   }).join('');
   const i = STAGES.findIndex(s => s.id === id), prev = STAGES[i - 1], next = STAGES[i + 1];
   stepnav.innerHTML = `${prev ? `<button class="btn ghost" data-go="${prev.id}">← ${prev.name}</button>` : '<span></span>'}
-    ${next ? `<button class="btn" data-go="${next.id}">Next: ${next.name} →</button>` : ''}`;
+    ${next ? `<button class="btn" data-go="${next.id}"${i + 1 > open ? ' disabled title="Finish this step first"' : ''}>Next: ${next.name} →</button>` : ''}`;
 };
 stepnav.addEventListener('click', e => { const b = (e.target as HTMLElement).closest('[data-go]') as HTMLElement | null; if (b) go(b.dataset.go!); });
 // Stages call this after finishing something so the step ticks update without leaving the step.
 (window as any).__repaintNav = () => paintNav(current?.id ?? 'site');
 
 function go(id: string) {
-  const s = STAGES.find(x => x.id === id) ?? STAGES[0];
+  let s = STAGES.find(x => x.id === id) ?? STAGES[0];
+  if (STAGES.indexOf(s) > reach()) s = STAGES[reach()];
   paintNav(s.id);
   if (location.hash !== '#' + s.id) history.replaceState(null, '', '#' + s.id);
   // Clean up the previous stage (maps, timers) and start from fresh panels so no listeners carry over.
@@ -49,7 +53,7 @@ name.addEventListener('change', () => project.update(p => { p.project.name = nam
 
 // Full address of the segment, top right
 const addr = document.getElementById('addr')!;
-const paintAddr = () => { const g = project.seg(); addr.innerHTML = g.address ? `<b>${g.limits.from || g.address.split(',')[0]}</b><span>${g.address}</span>` : ''; };
+const paintAddr = () => { const g = project.seg(); addr.hidden = !g.address; addr.innerHTML = g.address ? `<span class="lbl">LOCATION</span><b>${g.address}</b>` : ''; };
 (window as any).__paintAddr = paintAddr; paintAddr();
 const pill = document.getElementById('eng')!;
 const paint = () => {

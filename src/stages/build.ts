@@ -1,4 +1,4 @@
-// Build: every input is gathered in steps 1 to 4. Here the person picks the outputs and builds them in one run.
+// Build: every input is gathered in steps 1 to 5. Here the person picks the outputs and builds them in one run.
 import { live, repaintNav, type Stage } from './index';
 import { project } from '../lib/project';
 import { engine, outputsStore } from '../lib/engine';
@@ -15,19 +15,20 @@ export const buildStage: Stage = {
   done: () => !!(outputsStore.cover || outputsStore.concepts || outputsStore.streetview || outputsStore.handoff),
   async render(side, canvas) {
     const gen = live.gen;
-    if (!engine.on) { side.innerHTML = head(5, 'Build', 'Connecting to the engine…'); await engine.check(); if (gen !== live.gen) return; }
+    if (!engine.on) { side.innerHTML = head(6, 'Build', 'Connecting to the engine…'); await engine.check(); if (gen !== live.gen) return; }
     const seg = project.seg();
     const inputs: [boolean, string, string, string][] = [
       [(seg.path?.length ?? 0) > 1, 'Segment and setting', 'site', 'Mark the segment in Site.'],
       [!!seg.existingChecked, 'Existing street confirmed', 'existing', 'Confirm the existing street.'],
       [seg.alternatives.some(a => a.enabled !== false), `${seg.alternatives.filter(a => a.enabled !== false).length || 'No'} alternative${seg.alternatives.filter(a => a.enabled !== false).length === 1 ? '' : 's'} switched on`, 'alts', 'Switch on at least one alternative.'],
-      [!!outputsStore.curbs?.approved, 'Photo with approved curbs', 'visualize', 'Approve the curbs on a photo (needed for renderings only).']
+      [!!seg.perspective, 'Photo approved', 'photo', 'Approve a photo.'],
+      [!!outputsStore.curbs?.approved, 'Curbs approved', 'visualize', 'Approve the curbs.']
     ];
-    const canRender = inputs[0][0] && inputs[2][0] && inputs[3][0];
+    const canRender = inputs[0][0] && inputs[2][0] && inputs[4][0];
     const canCost = inputs[0][0] && inputs[2][0];
     const paint = () => {
       const any = (want.cover && inputs[0][0]) || (want.render && canRender) || (want.cost && canCost) || want.zip;
-      side.innerHTML = `${head(5, 'Build', 'Everything is built from the inputs in steps 1 to 4, in one run.')}
+      side.innerHTML = `${head(6, 'Build', 'Everything is built from the inputs in steps 1 to 5, in one run.')}
         ${task(1, 'Inputs', inputs.every(i => i[0]) ? 'done' : 'now', `<ul class="checklist">${inputs.map(([ok, label, id, need]) => `<li class="${ok ? 'ok' : 'no'}"><span class="dot"></span><div><b>${esc(label)}</b>${ok ? '' : `<span><a href="#${id}">${esc(need)}</a></span>`}</div></li>`).join('')}</ul>`)}
         ${task(2, 'Choose the outputs', 'now', `
           <label class="pick"><input type="checkbox" id="wv"${want.cover && inputs[0][0] ? ' checked' : ''}${inputs[0][0] ? '' : ' disabled'}><span><b>Cover sheet</b><small>11x17: Google aerial with the segment labeled, the location and the concepts in the set.</small></span></label>

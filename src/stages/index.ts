@@ -2,6 +2,7 @@ import { project, uid } from '../lib/project';
 import { sectionEditor } from './sectionEditor';
 import { siteStage } from './site';
 import { buildStage } from './build';
+import { photoStage } from './photo';
 import { sheetsStage } from './sheets';
 import { autoExisting, pathKey, type AutoResult } from '../lib/existingAuto';
 import type { LngLat } from '../lib/providers';
@@ -33,7 +34,7 @@ const existing: Stage = {
     const has = path.length > 1, key = pathKey(path);
     const a = seg.existingAuto;
     // A section the person already confirmed is never refilled on its own, unless the segment itself moved.
-    const stale = has && (a ? a.key !== key : !seg.existingChecked);
+    const stale = has && (!a || a.key !== key);
     const pct = (w: number) => `${w}%`;
     const sources = (r: AutoResult) => `
       <ul class="sources">
@@ -71,7 +72,6 @@ const existing: Stage = {
           if (!seg.limits.from) seg.limits.from = r.osm.street;
           seg.setting = r.scene;
           seg.alternatives.forEach(x => conformTo(x.section, r.section));
-          if (!seg.perspective && r.photoSrc) seg.perspective = r.photoSrc;   // the same photo starts the Render step
         });
         repaintNav();
         if (gen === live.gen) existing.render(side, canvas);
@@ -105,7 +105,7 @@ const alts: Stage = {
       altIdx = seg.alternatives.length - 1; repaintNav(); alts.render(side, canvas);
     });
     side.querySelectorAll<HTMLElement>('.altlist [data-i]').forEach(b => b.addEventListener('click', () => { altIdx = +b.dataset.i!; alts.render(side, canvas); }));
-    side.querySelectorAll<HTMLInputElement>('[data-on]').forEach(c => c.addEventListener('change', () => { project.update(() => { seg.alternatives[+c.dataset.on!].enabled = c.checked; }); alts.render(side, canvas); }));
+    side.querySelectorAll<HTMLInputElement>('[data-on]').forEach(c => c.addEventListener('change', () => { project.update(() => { seg.alternatives[+c.dataset.on!].enabled = c.checked; }); repaintNav(); alts.render(side, canvas); }));
     side.querySelector('#defaults')!.addEventListener('click', e => { const b = e.currentTarget as HTMLButtonElement; if (!b.dataset.arm) { b.dataset.arm = '1'; b.textContent = 'Click again: replaces all alternatives'; return; } project.update(() => { seg.alternatives = defaultAlternatives(seg.existing); }); altIdx = 0; repaintNav(); alts.render(side, canvas); });
     if (!a) { showSections(canvas, [{ id: 'ex', title: 'Existing', section: seg.existing, existing: true }], seg.setting); return; }
     conformTo(a.section, seg.existing);
@@ -120,4 +120,4 @@ const alts: Stage = {
 };
 
 
-export const STAGES: Stage[] = [site, existing, alts, visualizeStage, buildStage, sheetsStage];
+export const STAGES: Stage[] = [site, existing, alts, photoStage, visualizeStage, buildStage, sheetsStage];

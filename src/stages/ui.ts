@@ -2,7 +2,7 @@
 export const esc = (t: unknown) => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 
 export function head(n: number, title: string, lead: string) {
-  return `<header class="step-head"><span class="eyebrow">Step ${n} of 6</span><h2>${esc(title.toUpperCase())}</h2><p class="lead">${lead}</p></header>`;
+  return `<header class="step-head"><span class="eyebrow">Step ${n} of 7</span><h2>${esc(title.toUpperCase())}</h2><p class="lead">${lead}</p></header>`;
 }
 // One task in a stage: state is done / now / later (later is dimmed until the earlier task is done).
 export function task(i: number, title: string, state: 'done' | 'now' | 'later', body: string, id = '') {

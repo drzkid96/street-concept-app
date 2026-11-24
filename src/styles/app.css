@@ -6,7 +6,8 @@ h2{font-size:1.35rem;color:var(--accent)}h3{font-size:1.05rem}
 a{color:var(--accent)}
 button,input,select{font:inherit}
 
-.app{display:grid;grid-template-rows:auto auto 1fr;height:100vh}
+.app{display:flex;flex-direction:column;height:100vh}
+.work{flex:1 1 auto}
 .top{display:flex;align-items:center;gap:1rem;padding:.6rem 1.25rem;border-bottom:2px solid var(--fp-emerald);background:var(--bg)}
 .top h1{font-size:1.1rem;margin:0}
 .top .proj{margin-left:auto;display:flex;gap:.5rem;align-items:center}
@@ -183,3 +184,7 @@ input[type=range]{width:100%;accent-color:var(--fp-emerald)}
 .altlist li.off .linkbtn{color:var(--muted);text-decoration:line-through}
 .altlist input{width:1.05rem;height:1.05rem;accent-color:var(--fp-emerald)}
 .altlist .linkbtn{text-decoration:none;font-weight:600;text-align:left}
+.addr{display:flex!important;gap:.7rem;align-items:baseline;text-align:left;max-width:none;padding:.4rem 1.25rem;background:var(--fp-slate);color:#fff;font-size:.9rem}
+.addr[hidden]{display:none!important}.addr b{color:#fff;font-size:.95rem}.addr .lbl{font-size:.7rem;font-weight:700;letter-spacing:.08em;color:var(--fp-light-green)}
+.stages button:disabled{opacity:.45;cursor:not-allowed}
+.pano{position:absolute;inset:0}

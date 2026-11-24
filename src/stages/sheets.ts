@@ -17,7 +17,7 @@ export const sheetsStage: Stage = {
       if (gen !== live.gen) return;
       const pf = project.get();
       let shown = list.length - 1;
-      side.innerHTML = `${head(6, 'Review', 'Every output from the build. Read them, then mark them up for revisions or approve them.')}
+      side.innerHTML = `${head(7, 'Review', 'Every output from the build. Read them, then mark them up for revisions or approve them.')}
         ${task(1, 'Read the outputs', list.length ? 'now' : 'later', list.length ? `<ul class="filelist">${list.map((f, i) => `<li><button class="linkbtn" data-i="${i}">${esc(f.name)}</button><a class="note" target="_blank" rel="noopener" href="${engine.abs(f.url)}">open in new tab</a></li>`).join('')}</ul>` :
           `<p class="note">Nothing built yet. Go to <a href="#build">Build</a>.</p>`)}
         ${outputsStore.handoff ? `<p class="row"><a class="btn ghost" href="${engine.abs(outputsStore.handoff.zip)}" download="${esc(outputsStore.handoff.name)}">Download AI handoff ZIP</a></p>` : ''}
@@ -41,7 +41,7 @@ export const sheetsStage: Stage = {
       return;
     }
     const missing = [!seg.length_ft && 'segment length (Site)', !seg.keymap && 'key map (Site, Save key map)', !seg.alternatives.length && 'alternatives', !seg.alternatives.some(a => a.render) && 'concept renderings (Visualize)'].filter(Boolean);
-    side.innerHTML = `${head(6, 'Review', 'Build, read and download the concept sheets.')}
+    side.innerHTML = `${head(7, 'Review', 'Build, read and download the concept sheets.')}
       <p>11x17 landscape concept sheets: overview with key map, existing section and cost summary, then one sheet per alternative.</p>
       <div class="row"><button class="btn" id="build">Build sheets</button><button class="btn ghost" id="dl" disabled>Download PDF</button></div>
       ${missing.length ? `<div class="srcbar">Optional inputs not yet set: ${missing.join(', ')}. Sheets build without them.</div>` : ''}

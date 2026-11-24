@@ -30,11 +30,11 @@ let curbChoice: 'manual' | 'ai' = 'manual';
 let changing = false;
 
 export const visualizeStage: Stage = {
-  id: 'visualize', name: 'Photo & curbs',
+  id: 'visualize', name: 'Curbs',
   done: () => !!outputsStore.curbs?.approved,
   async render(side, canvas) {
     const gen = live.gen;
-    if (!engine.on) { side.innerHTML = head(4, 'Photo and curbs', 'Connecting to the engine…'); await engine.check(); if (gen !== live.gen) return; }
+    if (!engine.on) { side.innerHTML = head(5, 'Curbs', 'Connecting to the engine…'); await engine.check(); if (gen !== live.gen) return; }
     const seg: Segment = project.seg();
     const p: Perspective | undefined = seg.perspective;
     const road = seg.existing.elements.filter(e => !['sidewalk', 'parkway', 'curb'].includes(e.type)).reduce((a, e) => a + e.width_ft, 0) || 40;
@@ -44,7 +44,7 @@ export const visualizeStage: Stage = {
     let msgText = '';
 
     if (!engine.on) {
-      side.innerHTML = `${head(4, 'Photo and curbs', 'The photo the concepts are rendered on.')}<p class="badge warn">The rendering engine is not responding.</p><div class="row"><button class="btn" id="retry">Try again</button></div>`;
+      side.innerHTML = `${head(5, 'Curbs', 'The curb lines on the photo.')}<p class="badge warn">The rendering engine is not responding.</p><div class="row"><button class="btn" id="retry">Try again</button></div>`;
       side.querySelector('#retry')!.addEventListener('click', async () => { await engine.check(); visualizeStage.render(side, canvas); });
       canvas.innerHTML = '<div class="empty">Waiting for the engine.</div>';
       return;
@@ -54,13 +54,10 @@ export const visualizeStage: Stage = {
     const paint = () => {
       const keepOpen = (side.querySelector('details.more') as HTMLDetailsElement | null)?.open;
       const c = cb(), st = c?.status, approved = !!c?.approved;
-      const s1 = p ? 'done' : 'now', s2 = !p ? 'later' : approved ? 'done' : 'now';
-      side.innerHTML = `${head(4, 'Photo and curbs', 'The street photo the concepts are rendered on, and its curb lines. Nothing is built yet: that happens in Build.')}
-        ${task(1, 'Choose a photo', s1, p && !changing ? `
-          <div class="mini"><img src="${esc(p.src)}" alt="Selected photo"><div><span class="note">${esc(p.source)}${p.credit ? ' · ' + esc(p.credit) : ''}</span><br><button class="linkbtn" id="chg">Change photo</button></div></div>` : `
-          <div class="row"><button class="btn" id="sv">Use Street View</button><label class="btn ghost">Upload a photo<input id="file" type="file" accept="image/*" hidden></label>${p ? '<button class="linkbtn" id="keep">Keep the current photo</button>' : ''}</div>
-          <p class="note">Street View looks along your segment from its start. Upload works for any eye-level street photo or rendering.</p>`)}
-        ${task(2, 'Mark the curbs', s2, !p ? '<p class="note">Choose a photo first.</p>' : !c ? `
+      const s2 = !p ? 'later' : approved ? 'done' : 'now';
+      side.innerHTML = `${head(5, 'Curbs', 'Mark both curb lines on the approved photo. The renderer places everything from them.')}
+        ${p ? `<div class="mini"><img src="${esc(p.src)}" alt="Approved photo"><div><span class="note">${esc(p.source)}</span><br><a class="linkbtn" href="#photo">Change photo</a></div></div>` : ''}
+        ${task(1, 'Mark the curbs', s2, !p ? '<p class="note">Approve a photo first.</p>' : !c ? `
           <p class="note">The renderer needs to know exactly where both curbs are. Choose how to start:</p>
           <fieldset class="choice">
             <label><input type="radio" name="cm" value="manual"${curbChoice === 'manual' ? ' checked' : ''}><span><b>I will mark them</b><small>Click along each curb on the photo. Most reliable.</small></span></label>
@@ -69,8 +66,6 @@ export const visualizeStage: Stage = {
           <div class="field"><label for="w">Curb-to-curb width (ft)</label><input id="w" type="number" min="12" max="160" step="0.5" value="${road}"></div>
           <div class="row"><button class="btn" id="start">${curbChoice === 'ai' ? 'Find curbs with AI' : 'Start marking'}</button></div>` : curbPanel(c, st, approved))}
         ${more(`
-          <div class="field"><label for="src">Street View source</label><select id="src">${opt('google', 'Google Street View', settings.street)}${opt('panoramax', 'Panoramax (open data)', settings.street)}${opt('mapillary', 'Mapillary (needs a token)', settings.street)}</select></div>
-          <div class="field" id="mlyWrap"${settings.street === 'mapillary' ? '' : ' hidden'}><label for="mly">Mapillary access token</label><input id="mly" type="password" autocomplete="off" value="${esc(settings.mapillaryToken)}"></div>
           <div class="field"><label for="look">Photo looks toward</label><select id="look">${LOOK.map(x => opt(x, x[0].toUpperCase() + x.slice(1), look)).join('')}</select></div>`)}
         <p class="note" id="msg" role="status">${esc(msgText)}</p>`;
       if (keepOpen) (side.querySelector('details.more') as HTMLDetailsElement).open = true;
