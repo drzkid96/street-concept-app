@@ -3,7 +3,7 @@ import './styles/tokens.css';
 import './styles/app.css';
 import { STAGES, live, type Stage } from './stages';
 import { project } from './lib/project';
-import type { ProjectFile } from './lib/types';
+import { engine, onEngine } from './lib/engine';
 
 const nav = document.getElementById('stages')!;
 let side = document.getElementById('side')!;
@@ -34,19 +34,23 @@ window.addEventListener('hashchange', () => go(location.hash.slice(1)));
 name.value = project.get().project.name;
 name.addEventListener('change', () => project.update(p => { p.project.name = name.value; }));
 
-document.getElementById('export')!.addEventListener('click', () => {
-  const blob = new Blob([project.exportJSON()], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `${(project.get().project.name || 'project').replace(/\W+/g, '-')}.json`;
-  a.click();
-  URL.revokeObjectURL(a.href);
+const pill = document.getElementById('eng')!;
+const paint = () => {
+  pill.className = 'pill ' + (engine.on ? 'on' : 'off');
+  pill.textContent = engine.on ? 'Skills engine connected' : 'Engine offline';
+  pill.title = engine.on ? `${engine.url}\n` + Object.entries(engine.health!.skills).map(([k, v]) => `${k} ${v}`).join('\n') : `${engine.url} not reachable. Start the engine, or click to change its address.`;
+};
+onEngine(paint);
+pill.addEventListener('click', () => {
+  const box = document.createElement('div');
+  box.className = 'cbox engbox';
+  box.innerHTML = `<label>Engine address<input value="${engine.url}"></label><div class="row"><button class="btn">Connect</button><button class="btn ghost">Close</button></div>`;
+  document.querySelector('.top')!.appendChild(box);
+  const [ok, close] = box.querySelectorAll('button');
+  ok.addEventListener('click', async () => { engine.setUrl((box.querySelector('input') as HTMLInputElement).value.trim()); await engine.check(); box.remove(); go(location.hash.slice(1)); });
+  close.addEventListener('click', () => box.remove());
 });
-document.getElementById('import')!.addEventListener('change', async e => {
-  const f = (e.target as HTMLInputElement).files?.[0];
-  if (!f) return;
-  try { project.replace(JSON.parse(await f.text()) as ProjectFile); name.value = project.get().project.name; go(location.hash.slice(1)); }
-  catch { side.insertAdjacentHTML('afterbegin', '<p class="badge warn">Not a valid project file</p>'); }
-});
+engine.check();
+setInterval(() => engine.check(), 30000);
 
 go(location.hash.slice(1) || 'site');

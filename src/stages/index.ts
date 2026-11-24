@@ -5,7 +5,6 @@ import { siteStage } from './site';
 import { costStage } from './cost';
 import { sheetsStage } from './sheets';
 import { reviewStage } from './review';
-import { handoffStage } from './handoff';
 import { guessExisting } from '../lib/osmGuess';
 import { visualizeStage } from './visualize';
 import { SSS, PRECEDENCE } from '../lib/standards';
@@ -92,5 +91,5 @@ const placeholder = (n: number, id: string, name: string, text: string, skills: 
 });
 
 export const STAGES: Stage[] = [
-  site, existing, alts, costStage, visualizeStage, sheetsStage, reviewStage, handoffStage
+  site, existing, alts, costStage, visualizeStage, sheetsStage, reviewStage
 ];

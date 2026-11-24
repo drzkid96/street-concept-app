@@ -1,0 +1,36 @@
+// Connection to the Street Concept engine: Adrian's skills running unchanged (local Docker or a private host).
+// When the engine is reachable, stages use the skills' own outputs; otherwise the built-in tools stay available.
+const KEY = 'sca-engine-url';
+export const engine = {
+  url: (() => { try { return localStorage.getItem(KEY) || 'http://localhost:8765'; } catch { return 'http://localhost:8765'; } })(),
+  health: null as null | { ok: boolean; skills: Record<string, string>; models: Record<string, boolean> },
+  setUrl(u: string) { this.url = u.replace(/\/$/, ''); try { localStorage.setItem(KEY, this.url); } catch { /* ignore */ } },
+  abs(path: string) { return path.startsWith('http') ? path : this.url + path; },
+  async check(): Promise<boolean> {
+    try {
+      const r = await fetch(this.url + '/api/health', { signal: AbortSignal.timeout(2500) });
+      this.health = r.ok ? await r.json() : null;
+    } catch { this.health = null; }
+    listeners.forEach(f => f());
+    return !!this.health;
+  },
+  get on() { return !!this.health; },
+  async json<T = any>(path: string, body: unknown): Promise<T> {
+    const r = await fetch(this.url + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.detail || `Engine error ${r.status}`);
+    return j;
+  },
+  async form<T = any>(path: string, fd: FormData): Promise<T> {
+    const r = await fetch(this.url + path, { method: 'POST', body: fd });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.detail || `Engine error ${r.status}`);
+    return j;
+  }
+};
+const listeners = new Set<() => void>();
+export const onEngine = (f: () => void) => { listeners.add(f); return () => listeners.delete(f); };
+
+export interface EngineFile { name: string; url: string; bytes: number }
+// Last engine outputs for this browser session, shared by Cost, Visualize, Sheets and Review.
+export const outputsStore: { concepts?: { job: string; pdf: string; png?: string; summary: string[] }; streetview?: { job: string; pdfs: EngineFile[] }; curbJob?: string } = {};

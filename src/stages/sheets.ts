@@ -2,6 +2,7 @@ import { live, type Stage } from './index';
 import { project } from '../lib/project';
 import { buildSheets } from '../lib/sheet';
 import { renderPages, store, download } from '../lib/pdfView';
+import { engine, outputsStore } from '../lib/engine';
 
 const fileName = () => `${new Date().toISOString().slice(0, 10)}_${(project.get().project.name || 'STREET-CONCEPT').toUpperCase().replace(/\W+/g, '-')}_CONCEPT-SHEETS.pdf`;
 
@@ -9,6 +10,16 @@ export const sheetsStage: Stage = {
   id: 'sheets', name: 'Sheets',
   async render(side, canvas) {
     const gen = live.gen, seg = project.seg();
+    if (await engine.check()) {
+      const list = [...(outputsStore.concepts ? [{ name: 'Concepts and cost one-pager (fp-section-builder)', url: outputsStore.concepts.pdf }] : []),
+        ...(outputsStore.streetview?.pdfs ?? []).map(f => ({ name: `Concept sheets (fp-render-streetview): ${f.name}`, url: f.url }))];
+      if (gen !== live.gen) return;
+      side.innerHTML = `<h2>6. SHEETS</h2><p>PDFs built by the skills on the engine.</p>
+        ${list.map(f => `<p><a class="btn ghost" target="_blank" rel="noopener" href="${engine.abs(f.url)}">${f.name}</a></p>`).join('') || '<p class="note">None yet: build the one-pager in Cost and render concepts in Visualize.</p>'}
+        <div class="row"><a class="btn" href="#review">Review</a></div>`;
+      canvas.innerHTML = list.length ? `<iframe class="guide" title="Sheet" src="${engine.abs(list[list.length - 1].url)}"></iframe>` : '<div class="empty">No sheets yet.</div>';
+      return;
+    }
     const missing = [!seg.length_ft && 'segment length (Site)', !seg.keymap && 'key map (Site, Save key map)', !seg.alternatives.length && 'alternatives', !seg.alternatives.some(a => a.render) && 'concept renderings (Visualize)'].filter(Boolean);
     side.innerHTML = `<h2>6. SHEETS</h2>
       <p>11x17 landscape concept sheets: overview with key map, existing section and cost summary, then one sheet per alternative.</p>

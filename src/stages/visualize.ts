@@ -6,6 +6,8 @@ import { live, type Stage } from './index';
 import { project } from '../lib/project';
 import { sectionSvg } from '../lib/sectionSvg';
 import { CONVENTIONS, materialOf } from '../lib/standards';
+import { groundPolys, laneGlyph } from '../lib/glyph';
+import { engine, outputsStore } from '../lib/engine';
 import type { Section, Segment, Perspective } from '../lib/types';
 
 const esc = (t: string) => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
@@ -62,6 +64,16 @@ export function overlay(sec: Section, cam: Cam, W: number, H: number, opacity: n
       const z = Math.max(zNear * 1.8, 45), [u, v] = P((x0 + x1) / 2, z), wpx = f * e.width_ft * 0.6 / z;
       text.push(`<text x="${u.toFixed(1)}" y="${v.toFixed(1)}" font-size="${(wpx / 4.6).toFixed(1)}" text-anchor="middle" fill="#fff" font-family="Albert Sans, sans-serif" font-weight="700" transform="translate(${u.toFixed(1)} ${v.toFixed(1)}) scale(1 .35) translate(${(-u).toFixed(1)} ${(-v).toFixed(1)})">${CONVENTIONS.bus_lane_text}</text>`);
     }
+    // CA MUTCD markings (skill glyph set) laid on the ground plane, so they foreshorten like real paint
+    const gname = laneGlyph(e.type, e.direction);
+    if (gname && (e.direction !== 'none' || gname === 'twltl')) {
+      const dir: 1 | -1 = e.direction === 'inbound' ? -1 : 1, xc = (x0 + x1) / 2;
+      for (const z0 of [Math.max(zNear * 1.3, 22), Math.max(zNear * 1.3, 22) + 110]) {
+        // bike lane legend: bicycle (72 in), 72 in gap, arrow downstream (CA MUTCD Fig 9E-1)
+        const set = gname === 'arrow' ? [...groundPolys('bike', xc, dir === 1 ? z0 : z0 + 12, dir), ...groundPolys('arrow', xc, dir === 1 ? z0 + 12 : z0, dir)] : groundPolys(gname, xc, z0, dir);
+        for (const poly of set) text.push(`<polygon points="${poly.map(([gx, gz]) => P(gx, gz).map(n => n.toFixed(1)).join(',')).join(' ')}" fill="#fff" fill-opacity=".92"/>`);
+      }
+    }
     if (mat === 'posts') for (let z = Math.max(zNear * 1.2, 12); z < 200; z += 20) {
       const totalW = sec.elements.reduce((a, q) => a + q.width_ft, 0);
       const px = e.type === 'separated_bikeway' ? ((x0 + x1) / 2 < totalW / 2 ? x1 - 0.75 : x0 + 0.75) : (x0 + x1) / 2, [u, v] = P(px, z), hpx = f * 3 / z;
@@ -97,6 +109,7 @@ export const visualizeStage: Stage = {
     let clickL: [number, number] | null = null;
 
     side.innerHTML = `<h2>5. VISUALIZE</h2>
+      <div id="eng"></div>
       <label class="drop" id="drop" tabindex="0"><input id="file" type="file" accept="image/*" hidden><b>Upload perspective image</b><span class="note">Photo or rendering, JPG or PNG, or drop it here</span></label>
       <div class="row"><a class="btn ghost" href="#site">Capture street view</a>${p ? '<button class="btn ghost" id="rm">Remove image</button>' : ''}</div>
       ${p ? `
@@ -109,7 +122,7 @@ export const visualizeStage: Stage = {
       <div class="field"><label for="cx">Camera position across section <span id="cxV"></span></label><input id="cx" type="range" min="-20" step="0.5"></div>
       <div class="field"><label for="op">Overlay opacity <span id="opV"></span></label><input id="op" type="range" min="0.1" max="1" step="0.05"></div>
       <div class="row"><button class="btn ghost" id="reset">Reset auto-scale</button></div>
-      <div class="row"><button class="btn" id="save">Save rendering to sheets</button><button class="btn ghost" id="png">PNG</button><button class="btn ghost" id="svg">Layered SVG</button></div>` : ''}
+      <div class="row"><button class="btn" id="save">Save rendering to sheets</button></div>` : ''}
       <p id="msg" class="note" role="status"></p>`;
     const $ = <T extends HTMLElement>(s: string) => side.querySelector(s) as T | null;
     const msg = (t: string) => { $('#msg')!.textContent = t; };
@@ -205,20 +218,78 @@ export const visualizeStage: Stage = {
         await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error('Could not compose the rendering')); img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg); });
         const c = document.createElement('canvas'); c.width = W; c.height = H;
         c.getContext('2d')!.drawImage(img, 0, 0);
-        return { svg, jpg: c.toDataURL('image/jpeg', 0.88), png: () => new Promise<Blob>(r => c.toBlob(b => r(b!), 'image/png')) };
+        return { jpg: c.toDataURL('image/jpeg', 0.88) };
       };
-      const name = () => `${new Date().toISOString().slice(0, 10)}_${(which >= 0 ? alts[which].name : 'EXISTING').toUpperCase().replace(/\W+/g, '-')}_RENDERING`;
-      const save = (blob: Blob, n: string) => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = n; document.body.appendChild(a); a.click(); a.remove(); };
       $('#save')!.addEventListener('click', async () => {
         if (which < 0) { msg('Pick an alternative to save its rendering.'); return; }
         msg('Composing…');
         try { const r = await compose(); project.update(() => { alts[which].render = r.jpg; }); msg(`Saved to "${alts[which].name}" for the sheets.`); }
         catch (err) { msg((err as Error).message); }
       });
-      $('#png')!.addEventListener('click', async () => { try { const r = await compose(); save(await r.png(), name() + '.png'); } catch (err) { msg((err as Error).message); } });
-      $('#svg')!.addEventListener('click', async () => { try { const r = await compose(); save(new Blob([r.svg], { type: 'image/svg+xml' }), name() + '.svg'); } catch (err) { msg((err as Error).message); } });
       sync();
     }
     draw();
+    engine.check().then(on => { if (on && p && gen === live.gen) engineRender(side.querySelector('#eng') as HTMLElement, canvas, seg, p); });
   }
 };
+
+// ---------------------------------------------------------------- engine: fp-render-curbs Curb Guide + fp-render-streetview, unchanged
+const LOOK = ['north', 'east', 'south', 'west'];
+function engineRender(box: HTMLElement, canvas: HTMLElement, seg: Segment, p: Perspective) {
+  const gen = live.gen;
+  const road = seg.existing.elements.filter(e => !['sidewalk', 'parkway', 'curb'].includes(e.type)).reduce((a, e) => a + e.width_ft, 0);
+  const h = seg.location?.heading ?? p.heading ?? 0;
+  box.innerHTML = `<div class="srcbar"><b>FP rendering (engine)</b><br>fp-render-streetview renders every alternative on this photo with FP assets, then builds the concept-sheet PDF. Curbs come first: mark them in the Curb Guide and press <b>Copy all</b> to approve.</div>
+    <div class="field"><label for="w">Curb to curb (ft)</label><input id="w" type="number" min="20" max="160" step="0.5" value="${road || 40}"></div>
+    <div class="field"><label for="look">Looking</label><select id="look">${LOOK.map(x => `<option${x === LOOK[Math.round(h / 90) % 4] ? ' selected' : ''}>${x}</option>`).join('')}</select></div>
+    <div class="row"><button class="btn" id="guide">Open Curb Guide</button><button class="btn" id="render" disabled>Render concepts</button></div>
+    <p class="note" id="emsg" role="status"></p><div id="eout"></div>`;
+  const $ = (q: string) => box.querySelector(q) as HTMLInputElement;
+  const msg = (t: string) => { box.querySelector('#emsg')!.textContent = t; };
+  let approved = false;
+  const ready = () => { ($('#render') as unknown as HTMLButtonElement).disabled = !(outputsStore.curbJob && approved); };
+  // Curbs count as approved once the person presses Copy all in the guide (the marks reach the engine)
+  const poll = window.setInterval(async () => {
+    if (!outputsStore.curbJob || approved) return;
+    try { const r = await fetch(engine.abs(`/api/curbs/${outputsStore.curbJob}/marks`)).then(x => x.json()); if (r.ok) { approved = true; msg('Curbs approved. Ready to render.'); ready(); } } catch { /* engine busy */ }
+  }, 2500);
+  ready();
+  const showPdfs = () => {
+    const o = outputsStore.streetview;
+    box.querySelector('#eout')!.innerHTML = o ? o.pdfs.map(f => `<a class="btn ghost" target="_blank" rel="noopener" href="${engine.abs(f.url)}">${esc(f.name)}</a>`).join(' ') : '';
+  };
+  showPdfs();
+  const onMsg = async (ev: MessageEvent) => {
+    if (ev.data?.type !== 'curbs-marks' || ev.data.job !== outputsStore.curbJob) return;
+    approved = true; msg('Curbs approved. Ready to render.'); ready();
+  };
+  window.addEventListener('message', onMsg);
+  visualizeStage.dispose = () => { window.removeEventListener('message', onMsg); clearInterval(poll); };
+  $('#guide').addEventListener('click', async () => {
+    msg('Preparing the Curb Guide (AI prefill)…');
+    try {
+      const blob = await fetch(p.src).then(r => r.blob());
+      const fd = new FormData(); fd.append('photo', blob, 'photo.jpg'); fd.append('width', $('#w').value);
+      const r = await engine.form('/api/curbs/helper', fd);
+      if (gen !== live.gen) return;
+      outputsStore.curbJob = r.job; approved = false; ready();
+      canvas.innerHTML = `<iframe class="guide" title="Curb Guide" src="${engine.abs(r.guide)}"></iframe>`;
+      msg('Mark the curbs, then press Copy all in the guide to approve them.');
+    } catch (err) { msg((err as Error).message); }
+  });
+  $('#render').addEventListener('click', async () => {
+    msg('Rendering with fp-render-streetview (solving curbs, removing photo cars, rendering, sections, sheet). This can take a few minutes…');
+    ($('#render') as unknown as HTMLButtonElement).disabled = true;
+    try {
+      const pf = project.get();
+      const r = await engine.json('/api/streetview/run', { job: outputsStore.curbJob, project: pf, street: seg.limits.from || pf.project.name, looking: $('#look').value, title: pf.project.name });
+      if (gen !== live.gen) return;
+      outputsStore.streetview = { job: r.job, pdfs: r.pdfs };
+      const renders = r.files.filter((f: any) => /_T\d+\.png$/.test(f.name));
+      canvas.innerHTML = `<div class="persp-wrap">${renders.map((f: any) => `<figure class="persp"><img src="${engine.abs(f.url)}" alt="${esc(f.name)}"><figcaption>${esc(f.name)}</figcaption></figure>`).join('') || '<div class="empty">No renders yet</div>'}</div>`;
+      msg(r.ok ? 'Rendered. Concept sheets are ready below.' : 'Stopped at ' + (r.steps.find((s: any) => !s[1]) || ['?'])[0] + ': ' + r.log.split('\n').slice(-4).join(' '));
+      showPdfs();
+    } catch (err) { msg((err as Error).message); }
+    ready();
+  });
+}

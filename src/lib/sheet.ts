@@ -3,6 +3,7 @@ import { PDFDocument, rgb, type PDFFont, type PDFPage, type PDFImage } from 'pdf
 import fontkit from '@pdf-lib/fontkit';
 import type { Section, Segment, ProjectFile } from './types';
 import { ELEMENTS, CONVENTIONS, materialOf } from './standards';
+import { planPath, laneGlyph, glyph, extent } from './glyph';
 import { loadKnowledge, priceConcept, waterfall, money } from './cost';
 
 const W = 1224, H = 792, M = 36;             // 17 x 11 in, 0.5 in margin
@@ -52,11 +53,10 @@ function drawSection(p: PDFPage, F: Fonts, sec: Section, title: string, x: numbe
     if (e.type === 'median' && mat === 'concrete') fill = '#C9C6BD';
     p.drawRectangle({ x: cx, y: roadY, width: ew, height: roadH + (raised ? 6 : 0), color: hex(fill), borderColor: C.white, borderWidth: 0.75 });
     if (e.type === 'bus_lane' && ew > 34) text(p, F.b, CONVENTIONS.bus_lane_text, cx + 2, roadY + roadH / 2, 9, ew - 4, C.white, 'c');
-    if (e.direction === 'inbound' || e.direction === 'outbound') {
-      const d = e.direction === 'outbound' ? 1 : -1, ax = cx + ew / 2, ay = roadY + 14;
-      p.drawLine({ start: { x: ax - 8 * d, y: ay }, end: { x: ax + 8 * d, y: ay }, thickness: 1.5, color: C.white });
-      p.drawLine({ start: { x: ax + 8 * d, y: ay }, end: { x: ax + 3 * d, y: ay + 4 }, thickness: 1.5, color: C.white });
-      p.drawLine({ start: { x: ax + 8 * d, y: ay }, end: { x: ax + 3 * d, y: ay - 4 }, thickness: 1.5, color: C.white });
+    const gname = laneGlyph(e.type, e.direction);
+    if (gname && (e.direction !== 'none' || gname === 'twltl')) {
+      const ex = extent(glyph(gname)), sc = Math.min((roadH * 0.55) / (ex.w1 - ex.w0), (ew * 0.7) / (ex.u1 - ex.u0));
+      p.drawSvgPath(planPath(gname, 0, 0, sc, e.direction === 'inbound' ? -1 : 1), { x: cx + ew / 2, y: roadY + roadH * 0.42, color: C.white });
     }
     if (mat === 'posts') p.drawRectangle({ x: cx + (e.type === 'separated_bikeway' ? 2 : ew / 2 - 1.5), y: roadY + roadH, width: 3, height: 18, color: C.white, borderColor: hex('#C8102E'), borderWidth: 0.6 });
     p.drawLine({ start: { x: cx, y: roadY - 4 }, end: { x: cx, y: roadY - 10 }, thickness: 0.5, color: C.slate });

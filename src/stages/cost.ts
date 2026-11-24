@@ -1,5 +1,7 @@
 import type { Stage } from './index';
 import { project } from '../lib/project';
+import { engine, outputsStore } from '../lib/engine';
+import { live } from './index';
 import { loadKnowledge, importKnowledge, forgetKnowledge, priceConcept, waterfall, money, type Line, type Knowledge } from '../lib/cost';
 
 const esc = (t: string) => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
@@ -13,18 +15,15 @@ export function costSummary(k: Knowledge) {
   });
 }
 
-function csv(rows: (string | number)[][]) {
-  return rows.map(r => r.map(v => typeof v === 'number' ? String(Math.round(v * 100) / 100) : `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\r\n');
-}
-
 export const costStage: Stage = {
   id: 'cost', name: 'Cost',
   async render(side, canvas) {
     const seg = project.seg();
+    if (await engine.check()) return engineCost(side, canvas);
     side.innerHTML = `<h2>4. COST</h2>
+      <div class="srcbar">Engine not connected: built-in estimate. Start the engine to run fp-section-builder (one-pager, tiers, regional prices).</div>
       <p>Planning-level estimate of each alternative, priced as the change from existing over ${seg.length_ft.toLocaleString()}'.</p>
       <div class="field"><label for="ctx">Context</label><select id="ctx"><option value="urban">Urban</option><option value="suburban">Suburban</option><option value="rural">Rural</option></select></div>
-      <div class="row"><button class="btn" id="csv">Download estimate (CSV)</button></div>
       <div class="srcbar" id="src">Loading cost knowledge…</div>
       <p class="note">Sketch-level only. Composites and markups from the F&amp;P cross-section cost knowledge workbook; striping removal not priced.</p>`;
     (side.querySelector('#ctx') as HTMLSelectElement).value = context;
@@ -38,7 +37,6 @@ export const costStage: Stage = {
         catch (err) { side.querySelector('#src')!.insertAdjacentHTML('beforeend', `<p class="badge warn">${esc((err as Error).message)}</p>`); }
       });
       canvas.innerHTML = '<div class="empty">Import the cost data to price the alternatives.</div>';
-      (side.querySelector('#csv') as HTMLButtonElement).disabled = true;
       return;
     }
     const k: Knowledge = loaded;
@@ -64,19 +62,46 @@ export const costStage: Stage = {
       </div>`;
     };
     side.querySelector('#ctx')!.addEventListener('change', e => { context = (e.target as HTMLSelectElement).value as typeof context; draw(); });
-    side.querySelector('#csv')!.addEventListener('click', () => {
-      const res = costSummary(k);
-      const rows: (string | number)[][] = [['Alternative', 'Group', 'Element', 'Item', 'Qty', 'Unit', 'Unit cost', 'Amount', 'Note']];
-      res.forEach(r => {
-        r.lines.forEach(l => rows.push([r.alt.name, l.group, l.element, l.item, l.qty, l.unit, l.rate, l.raw, l.note]));
-        r.w.rows.slice(1).forEach(([n, v]) => rows.push([r.alt.name, 'Markup', '', n, '', '', '', v, '']));
-        rows.push([r.alt.name, 'Total', '', `Estimate (range ${money(r.w.low)} to ${money(r.w.high)})`, '', '', '', r.w.total, '']);
-      });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(new Blob([csv(rows)], { type: 'text/csv' }));
-      a.download = `${(project.get().project.name || 'estimate').replace(/\W+/g, '-')}-estimate.csv`;
-      a.click(); URL.revokeObjectURL(a.href);
-    });
     draw();
   }
 };
+
+// ---------------------------------------------------------------- engine: fp-section-builder (cost/run.py), unchanged
+const SETTINGS = ['la-residential', 'la-neighborhood', 'la-commercial', 'la-core', 'socal-suburban', 'main-street', 'coastal', 'desert', 'san-diego', 'sf-residential', 'sf-commercial', 'sf-core', 'bay-suburban'];
+const ENG = { city: 'Los Angeles', setting: 'la-commercial', mode: 'default' };
+
+async function engineCost(side: HTMLElement, canvas: HTMLElement) {
+  const gen = live.gen, seg = project.seg();
+  side.innerHTML = `<h2>4. CONCEPTS AND COST</h2>
+    <div class="srcbar">Runs fp-section-builder on the engine: the 11x17 one-pager with every concept, FP assets, and construction cost by delivery tier from the cost knowledge workbook (regional 2025-26 F&amp;P prices).</div>
+    <div class="field"><label for="city">City (sets the price region)</label><input id="city" value="${esc(ENG.city)}"></div>
+    <div class="field"><label for="setting">Setting (scene, frontages, complexity)</label><select id="setting">${SETTINGS.map(x => `<option${x === ENG.setting ? ' selected' : ''}>${x}</option>`).join('')}</select></div>
+    <div class="field"><label for="mode">Method</label><select id="mode"><option value="default">Default (tiers T1 to T4)</option><option value="atp"${ENG.mode === 'atp' ? ' selected' : ''}>ATP method</option></select></div>
+    <div class="row"><button class="btn" id="run">Build one-pager</button><a class="btn ghost" id="pdf" target="_blank" rel="noopener" hidden>Open PDF</a></div>
+    <p class="note" id="msg" role="status"></p>`;
+  const $ = (q: string) => side.querySelector(q) as HTMLInputElement;
+  const msg = (t: string) => { side.querySelector('#msg')!.textContent = t; };
+  const show = () => {
+    const o = outputsStore.concepts;
+    if (!o) { canvas.innerHTML = '<div class="empty">Build the one-pager to see the concepts and costs here.</div>'; return; }
+    const a = $('#pdf') as unknown as HTMLAnchorElement; a.href = engine.abs(o.pdf); a.hidden = false;
+    canvas.innerHTML = `<div style="padding:1rem;display:grid;gap:1rem">
+      ${o.png ? `<img src="${engine.abs(o.png)}" alt="Concepts and cost one-pager" style="width:100%;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.12)">` : ''}
+      <div class="srcbar">${o.summary.map(esc).join('<br>')}</div></div>`;
+  };
+  $('#run').addEventListener('click', async () => {
+    if (!seg.alternatives.length) { msg('Add at least one alternative first.'); return; }
+    ENG.city = $('#city').value.trim(); ENG.setting = $('#setting').value; ENG.mode = $('#mode').value;
+    msg('Running fp-section-builder…');
+    try {
+      const r = await engine.json('/api/concepts', { project: project.get(), street: seg.limits.from || undefined, city: ENG.city || undefined, setting: ENG.setting, mode: ENG.mode });
+      if (gen !== live.gen) return;
+      if (!r.ok) { msg('The skill reported an error: ' + r.log.split('\n').slice(-3).join(' ')); return; }
+      const f = (end: string) => r.files.find((x: any) => x.name.endsWith(end))?.url;
+      outputsStore.concepts = { job: r.job, pdf: f('_sheet.pdf'), png: f('_sheet.png'), summary: r.summary };
+      msg(`Built in ${r.seconds} s.`);
+      show();
+    } catch (err) { msg((err as Error).message); }
+  });
+  show();
+}

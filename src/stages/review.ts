@@ -2,7 +2,8 @@
 import { live, type Stage } from './index';
 import { project } from '../lib/project';
 import { buildSheets } from '../lib/sheet';
-import { renderPages, store, download } from '../lib/pdfView';
+import { renderPages, store } from '../lib/pdfView';
+import { engine, outputsStore } from '../lib/engine';
 import type { Markup } from '../lib/types';
 
 type Tool = Markup['tool'] | 'select';
@@ -45,6 +46,23 @@ export const reviewStage: Stage = {
   async render(side, canvas) {
     const gen = live.gen;
     const pf = project.get();
+    if (await engine.check()) {
+      const pdfs = [...(outputsStore.concepts ? [outputsStore.concepts.pdf] : []), ...(outputsStore.streetview?.pdfs ?? []).map(f => f.url)];
+      side.innerHTML = `<h2>7. REVIEW</h2><p>fp-core-review markup viewer on the sheets: callouts, clouds, boxes, lines, pen, snap. <b>Send</b> records the markups on the engine for revision; <b>Approve</b> records the approved revision.</p>
+        <div class="row"><button class="btn" id="open"${pdfs.length ? '' : ' disabled'}>Open markup viewer</button></div><p class="note" id="msg" role="status">${pdfs.length ? `${pdfs.length} PDF${pdfs.length > 1 ? 's' : ''} ready.` : 'Build sheets first.'}</p>`;
+      canvas.innerHTML = '<div class="empty">The markup viewer opens here.</div>';
+      side.querySelector('#open')!.addEventListener('click', async () => {
+        side.querySelector('#msg')!.textContent = 'Building the markup page…';
+        try {
+          const fd = new FormData(); fd.append('title', pf.project.name || 'Street concepts'); fd.append('rev', String(1 + pf.review.filter(r => r.kind === 'approved').length)); fd.append('urls', JSON.stringify(pdfs));
+          const r = await engine.form('/api/review', fd);
+          if (gen !== live.gen) return;
+          canvas.innerHTML = `<iframe class="guide" title="Markup viewer" src="${engine.abs(r.page)}"></iframe>`;
+          side.querySelector('#msg')!.textContent = 'Markups save to the engine as you draw.';
+        } catch (err) { side.querySelector('#msg')!.textContent = (err as Error).message; }
+      });
+      return;
+    }
     side.innerHTML = `<h2>7. REVIEW</h2>
       <div class="tools" role="toolbar" aria-label="Markup tools">${TOOLS.map(([t, l]) => `<button class="btn ghost" data-t="${t}" aria-pressed="${t === tool}">${l}</button>`).join('')}</div>
       <p class="note">Drag on a sheet to place a mark. Callouts ask for text. Select a mark and press Delete to remove it.</p>
@@ -128,9 +146,8 @@ export const reviewStage: Stage = {
       if (!marks.length) { msg.textContent = 'No markups to send.'; return; }
       const rec = record('send');
       const payload = JSON.stringify({ project: pf.project.name, sheetsBuilt: store.builtAt, ...rec }, null, 2);
-      download(payload, `${rec.at.slice(0, 10)}_MARKUPS.json`, 'application/json');
-      try { await navigator.clipboard.writeText(payload); msg.textContent = 'Markups saved to the project, downloaded and copied. Paste them to Claude to revise.'; }
-      catch { msg.textContent = 'Markups saved to the project and downloaded.'; }
+      try { await navigator.clipboard.writeText(payload); msg.textContent = 'Markups saved to the project and copied. Paste them to Claude to revise.'; }
+      catch { msg.textContent = 'Markups saved to the project.'; }
       reviewStage.render(side, canvas);
     });
     side.querySelector('#ok')!.addEventListener('click', () => {

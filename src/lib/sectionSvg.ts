@@ -1,5 +1,6 @@
 import type { Section } from './types';
 import { ELEMENTS, CONVENTIONS, materialOf } from './standards';
+import { planPath, laneGlyph, glyph, extent } from './glyph';
 
 const esc = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 
@@ -19,9 +20,12 @@ export function sectionSvg(sec: Section, title = ''): string {
     if ((mat === 'posts' || mat === 'curb') && w > 6) { const px = e.type === 'separated_bikeway' ? x + 3 : x + w / 2; parts.push(mat === 'posts' ? `<rect x="${px - 1.5}" y="${top - 22}" width="3" height="22" fill="#fff" stroke="#C8102E" stroke-width=".8"/>` : `<rect x="${px - 3}" y="${top - 8}" width="8" height="8" fill="var(--st-concrete)"/>`); }
     if (e.type === 'bus_lane' && w > 40)
       parts.push(`<text x="${x + w / 2}" y="${top + roadH / 2 + 5}" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">${CONVENTIONS.bus_lane_text}</text>`);
-    if (e.direction === 'inbound' || e.direction === 'outbound') {
-      const ay = top + roadH - 18, dir = e.direction === 'outbound' ? 1 : -1, cx = x + w / 2;
-      parts.push(`<path d="M${cx - 10 * dir} ${ay} L${cx + 10 * dir} ${ay} M${cx + 4 * dir} ${ay - 5} L${cx + 10 * dir} ${ay} L${cx + 4 * dir} ${ay + 5}" stroke="#fff" stroke-width="2" fill="none"/>`);
+    // CA MUTCD marking (skill glyph set), in plan: up = away from the viewer
+    const gname = laneGlyph(e.type, e.direction);
+    if (gname && (e.direction !== 'none' || gname === 'twltl')) {
+      const ex = extent(glyph(gname)), gl = ex.w1 - ex.w0, gw = ex.u1 - ex.u0;
+      const sc = Math.min((roadH * 0.62) / gl, (w * 0.7) / gw);
+      parts.push(`<path d="${planPath(gname, x + w / 2, top + roadH * 0.55, sc, e.direction === 'inbound' ? -1 : 1)}" fill="#fff"/>`);
     }
     const ly = top + roadH + 26;
     if (w > 28) {
