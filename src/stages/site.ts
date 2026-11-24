@@ -97,13 +97,18 @@ export const siteStage: Stage = {
       try {
         const p = mv.getPath();
         if (p.length > 1) { const xs = p.map(c => c[0]), ys = p.map(c => c[1]); mv.map.fitBounds([[Math.min(...xs), Math.min(...ys)], [Math.max(...xs), Math.max(...ys)]], { padding: 60, duration: 0 }); }
-        mv.map.once('idle', () => {
+        let done = false;
+        const capture = () => {
+          if (done) return; done = true;
           const src = mv.map.getCanvas();
           const c = document.createElement('canvas'); const k = Math.min(1, 1400 / src.width);
           c.width = src.width * k; c.height = src.height * k; c.getContext('2d')!.drawImage(src, 0, 0, c.width, c.height);
           project.update(() => { seg.keymap = c.toDataURL('image/jpeg', 0.85); });
           msg('Key map saved for the sheets.');
-        });
+        };
+        msg('Saving key map…');
+        mv.map.once('idle', capture);
+        setTimeout(capture, 2500); // tiles may already be idle, so do not wait on the event alone
         mv.map.triggerRepaint();
       } catch (err) { msg('Key map could not be saved: ' + (err as Error).message); }
     });
