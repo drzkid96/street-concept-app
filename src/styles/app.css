@@ -226,3 +226,12 @@ details.task .sum{font-weight:400;font-size:.78rem;color:var(--muted);white-spac
 .dlg{border:0;border-radius:12px;padding:1.5rem;max-width:min(560px,92vw);box-shadow:0 20px 60px rgba(0,36,46,.35);color:var(--ink)}
 .dlg::backdrop{background:rgba(0,36,46,.45)}.dlg h3{font-size:.95rem;margin:.9rem 0 .2rem}.dlg p{margin:.3rem 0;font-size:.92rem}.dlg form{margin-top:1rem;text-align:right}
 .fmt{display:flex;gap:1rem;margin:.35rem 0 0;font-size:.85rem}.fmt label{display:flex;gap:.35rem;align-items:center;cursor:pointer}
+
+/* build progress */
+.prog{margin:.75rem 0 .5rem;padding:.7rem .8rem;border:1px solid var(--line,#d9ddd8);border-radius:10px;background:#fff}
+.progtop{display:flex;justify-content:space-between;align-items:baseline;gap:.75rem;font-size:.9rem}
+.progtop b{font-size:1.05rem;color:var(--fp-slate,#00242E)}
+.progeta{color:var(--fp-emerald,#00574A);font-weight:600}
+.progbar{height:10px;border-radius:6px;background:#E7E8E8;overflow:hidden;margin:.45rem 0 .4rem}
+.progfill{height:100%;width:1%;background:var(--fp-jade,#1B795A);border-radius:6px;transition:width .5s linear}
+.prognow{font-size:.82rem;color:#5b6b70;min-height:1.1em}

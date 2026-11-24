@@ -12,6 +12,49 @@ let costFmt: 'excel' | 'pdf' = 'excel';
 let building = false;
 const log: string[] = [];
 
+// Progress of a build: each output is a task with an expected duration (learned from the last run on this browser),
+// and the rendering reports its own steps, so the bar and the time left stay honest while it runs.
+type PTask = { key: string; label: string; est: number; t0?: number; t1?: number; floor?: number; sub?: string };
+const prog: { tasks: PTask[]; timer?: number } = { tasks: [] };
+const EST_KEY = 'sca-build-secs';
+const DEFAULT_EST: Record<string, number> = { existing: 12, sections: 15, cost: 8, 'render-lo': 150, 'render-hi': 420, compile: 5, zip: 10 };
+const learned = (): Record<string, number> => { try { return JSON.parse(localStorage.getItem(EST_KEY) || '{}'); } catch { return {}; } };
+const estOf = (k: string) => learned()[k] ?? DEFAULT_EST[k] ?? 10;
+const learn = (k: string, secs: number) => { try { const l = learned(); l[k] = Math.round(l[k] ? 0.5 * l[k] + 0.5 * secs : secs); localStorage.setItem(EST_KEY, JSON.stringify(l)); } catch { /* ignore */ } };
+// share of a rendering run finished when each of its steps starts
+const RENDER_AT: Record<string, number> = { assist: 0, prep: 0.03, calibrate: 0.3, render: 0.48, sections: 0.86, sheet: 0.93 };
+const RENDER_SAY: Record<string, string> = { assist: 'solving the curbs', prep: 'clearing the roadway in the photo', calibrate: 'fitting the camera', render: 'drawing the concepts', sections: 'drawing the sections', sheet: 'laying out the sheets' };
+function progView(): { pct: number; text: string; now: string } {
+  const now = Date.now(); let done = 0, total = 0, left = 0, cur: PTask | undefined, over = false;
+  for (const t of prog.tasks) {
+    total += t.est;
+    if (t.t1) { done += t.est; continue; }
+    if (t.t0) {
+      cur = t;
+      const el = (now - t.t0) / 1000;
+      let f = Math.min(el / t.est, 0.97);
+      if (t.floor != null) f = Math.max(f, Math.min(t.floor + 0.02, 0.97));
+      if (el > t.est) over = true;
+      done += t.est * f; left += t.est * (1 - f);
+    } else left += t.est;
+  }
+  const pct = total ? Math.max(1, Math.min(99, Math.round(100 * done / total))) : 0;
+  const mins = left / 60;
+  const text = over && left < 15 ? 'Taking a little longer than usual, still working' : left < 50 ? 'Less than a minute left' : `About ${Math.max(1, Math.round(mins))} min left`;
+  return { pct, text, now: cur ? cur.label + (cur.sub ? ': ' + cur.sub : '') : '' };
+}
+function progTick() {
+  const el = document.getElementById('prog'); if (!el) return;
+  const v = progView();
+  (el.querySelector('.progfill') as HTMLElement).style.width = v.pct + '%';
+  el.querySelector('.progpct')!.textContent = v.pct + '%';
+  el.querySelector('.progeta')!.textContent = v.text;
+  el.querySelector('.prognow')!.textContent = v.now;
+  el.setAttribute('aria-valuenow', String(v.pct));
+}
+const progBegin = (key: string) => { const t = prog.tasks.find(x => x.key === key); if (t && !t.t0) t.t0 = Date.now(); progTick(); };
+const progEnd = (key: string, ok = true) => { const t = prog.tasks.find(x => x.key === key); if (t && t.t0 && !t.t1) { t.t1 = Date.now(); if (ok) learn(key, (t.t1 - t.t0) / 1000); } progTick(); };
+
 export const buildStage: Stage = {
   id: 'build', name: 'Build',
   done: () => !!(outputsStore.compiled || outputsStore.concepts || outputsStore.streetview || outputsStore.handoff),
@@ -43,6 +86,7 @@ export const buildStage: Stage = {
         <p class="note">Standard package: renderings and sections, compiled into one PDF.</p>
         ${task(3, 'Build', 'now', `
           <div class="row"><button class="btn" id="go"${any && !building ? '' : ' disabled'}>${building ? 'Building…' : 'Build outputs'}</button></div>
+          ${building ? `<div class="prog" id="prog" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Build progress"><div class="progtop"><b class="progpct"></b><span class="progeta"></span></div><div class="progbar"><div class="progfill"></div></div><div class="prognow"></div></div>` : ''}
           <ul class="buildlog">${log.map(l => `<li>${esc(l)}</li>`).join('')}</ul>
           ${!building && (outputsStore.concepts || outputsStore.streetview || outputsStore.handoff) ? '<div class="row"><a class="btn" href="#sheets">See the outputs in Review →</a></div>' : ''}`)}`;
       side.querySelector('#wr')?.addEventListener('change', e => { want.render = (e.target as HTMLInputElement).checked; paint(); });
@@ -53,6 +97,7 @@ export const buildStage: Stage = {
       side.querySelector('#wz')?.addEventListener('change', e => { want.zip = (e.target as HTMLInputElement).checked; paint(); });
       side.querySelector('#mode')?.addEventListener('change', e => { method = (e.target as HTMLSelectElement).value; });
       side.querySelector('#go')?.addEventListener('click', build);
+      progTick();
     };
     const showCanvas = () => {
       const r = outputsStore.streetview?.renders ?? [], c = outputsStore.concepts;
@@ -63,7 +108,20 @@ export const buildStage: Stage = {
       building = true; log.length = 0; paint();
       // only the alternatives switched on go into the outputs
       const pf = structuredClone(project.get()); pf.segments.forEach(g => { g.alternatives = g.alternatives.filter(a => a.enabled !== false); });
-      const say = (t: string) => { log.push(t); if (gen === live.gen) paint(); };
+      const KEYS: [string, string, string][] = [['Existing conditions report', 'existing', 'Existing conditions report'], ['Concept sections sheet', 'sections', 'Sections sheet'], ['Cost estimate', 'cost', 'Cost estimate'], ['Concept renderings', 'render', 'Renderings'], ['Compiling', 'compile', 'Compiling the PDF set'], ['AI handoff ZIP', 'zip', 'Handoff ZIP']];
+      let hi = false;
+      try { if (want.render && canRender && seg.curbMarks) { const bm = await createImageBitmap(await fetch(seg.curbMarks.photo).then(x => x.blob())); hi = bm.width * bm.height > 600000; } } catch { /* estimate only */ }
+      const rk = hi ? 'render-hi' : 'render-lo';
+      const plan: [boolean, string, string][] = [[want.existing, 'existing', 'Existing conditions report'], [want.sections && canCost, 'sections', 'Sections sheet'], [want.cost && canCost, 'cost', 'Cost estimate'], [want.render && canRender, rk, 'Renderings'], [true, 'compile', 'Compiling the PDF set'], [want.zip, 'zip', 'Handoff ZIP']];
+      prog.tasks = plan.filter(x => x[0]).map(([, key, label]) => ({ key, label, est: estOf(key) }));
+      window.clearInterval(prog.timer); prog.timer = window.setInterval(progTick, 500);
+      let curKey = '';
+      const say = (t: string) => {
+        if (curKey) progEnd(curKey, !/stopped|could not|timed out/i.test(log[log.length - 1] || ''));
+        const k = KEYS.find(x => t.startsWith(x[0])); curKey = k ? (k[1] === 'render' ? rk : k[1]) : '';
+        log.push(t); if (gen === live.gen) paint();
+        if (curKey) progBegin(curKey);
+      };
       outputsStore.compiled = undefined;
       if (!want.existing) outputsStore.existingReport = undefined;
       else {
@@ -112,7 +170,22 @@ export const buildStage: Stage = {
           const fd = new FormData(); fd.append('photo', blob, 'photo.jpg'); fd.append('marks', cm.marks); fd.append('width', String(cm.width));
           const c = await engine.form('/api/curbs/restore', fd) as { job: string };
           renderJob = c.job;
-          let r: any = await engine.json('/api/streetview/run', { job: c.job, project: pf, street: seg.limits.from || pf.project.name, looking: outputsStore.look, title: pf.project.name, setting: seg.setting }).catch(() => null);
+          let r: any, settled = false;
+          const runP = engine.json('/api/streetview/run', { job: c.job, project: pf, street: seg.limits.from || pf.project.name, looking: outputsStore.look, title: pf.project.name, setting: seg.setting }).catch(() => null).then(x => { settled = true; return x; });
+          const rt = prog.tasks.find(x => x.key === rk);
+          while (!settled) {   // the engine reports each rendering step: the bar follows it
+            await Promise.race([runP, new Promise(res => setTimeout(res, 3000))]);
+            if (settled) break;
+            const st: any = await Promise.race([fetch(engine.url + `/api/run/${c.job}`).then(x => x.ok ? x.json() : null).catch(() => null), new Promise(res => setTimeout(() => res(null), 4000))]);
+            if (st?.step && rt) {
+              const nCal = (st.steps || []).filter((x: any) => x[0] === 'calibrate').length;
+              rt.floor = st.step === 'calibrate' && nCal ? 0.39 : RENDER_AT[st.step] ?? rt.floor; rt.sub = RENDER_SAY[st.step] ?? st.step;
+              // a run moving faster or slower than expected re-times the rest
+              const el = (Date.now() - (rt.t0 ?? Date.now())) / 1000;
+              if ((rt.floor ?? 0) >= 0.3 && el > 20) rt.est = Math.max(rt.est * 0.5, Math.min(rt.est * 3, el / (rt.floor as number) * 0.5 + rt.est * 0.5));
+            }
+          }
+          r = await runP;
           for (let i = 0; !r && i < 400; i++) {   // the request was cut off: the run continues on the engine
             await new Promise(res => setTimeout(res, 4000));
             const st = await engine.get(`/api/run/${c.job}`).catch(() => null);
@@ -139,6 +212,8 @@ export const buildStage: Stage = {
           log[log.length - 1] = `AI handoff ZIP: done (${Math.round(r.bytes / 1024 / 1024 * 10) / 10} MB).`;
         } catch (err) { log[log.length - 1] = 'AI handoff ZIP: stopped. ' + (err as Error).message; }
       }
+      if (curKey) progEnd(curKey, !/stopped|could not|timed out/i.test(log[log.length - 1] || ''));
+      window.clearInterval(prog.timer); prog.tasks = [];
       building = false; repaintNav();
       if (gen === live.gen && (outputsStore.compiled || outputsStore.concepts)) { goTo('sheets'); return; }
       if (gen === live.gen) { paint(); showCanvas(); }
