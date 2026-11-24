@@ -2,11 +2,13 @@
 // When the engine is reachable, stages use the skills' own outputs; otherwise the built-in tools stay available.
 const KEY = 'sca-engine-url';
 export const engine = {
-  url: (() => { try { return localStorage.getItem(KEY) || 'http://localhost:8765'; } catch { return 'http://localhost:8765'; } })(),
+  // Served by the engine itself (cloud): same origin, no address needed. On GitHub Pages: the saved address.
+  url: (() => { if (!location.hostname.endsWith('github.io')) return ''; try { return localStorage.getItem(KEY) || ''; } catch { return ''; } })(),
   health: null as null | { ok: boolean; skills: Record<string, string>; models: Record<string, boolean> },
   setUrl(u: string) { this.url = u.replace(/\/$/, ''); try { localStorage.setItem(KEY, this.url); } catch { /* ignore */ } },
   abs(path: string) { return path.startsWith('http') ? path : this.url + path; },
   async check(): Promise<boolean> {
+    if (this.url === '' && location.hostname.endsWith('github.io')) { this.health = null; listeners.forEach(f => f()); return false; }
     try {
       const r = await fetch(this.url + '/api/health', { signal: AbortSignal.timeout(2500) });
       this.health = r.ok ? await r.json() : null;
