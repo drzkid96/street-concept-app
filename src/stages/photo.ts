@@ -6,18 +6,8 @@ import { outputsStore } from '../lib/engine';
 import { bearing, type LngLat } from '../lib/providers';
 import { GOOGLE_KEY } from '../lib/config';
 import { head, task, esc } from './ui';
+import { loadMaps } from '../lib/providers';
 
-let gm: Promise<any> | null = null;
-function loadMaps(): Promise<any> {
-  return gm ??= new Promise((res, rej) => {
-    (window as any).__gmInit = () => res((window as any).google.maps);
-    (window as any).gm_authFailure = () => { gm = null; rej(new Error('Google refused the key for Street View on this site.')); };
-    const s = document.createElement('script');
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_KEY}&callback=__gmInit&loading=async&v=weekly`;
-    s.onerror = () => { gm = null; rej(new Error('Google Maps could not load.')); };
-    document.head.appendChild(s);
-  });
-}
 function readImage(file: File, max = 1800): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();

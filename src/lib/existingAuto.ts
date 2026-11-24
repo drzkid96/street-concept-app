@@ -92,7 +92,7 @@ export function blend(osmSec: Section, pc: PhotoCheck | null, widthTagged: boole
   if (!oneway && !yellow && lines.length >= 2) flags.push('OpenStreetMap has two-way traffic, but no yellow center line shows on the photo. Kept two-way; check it.');
   const agree = interior ? `${checked} of ${interior} lane line${interior === 1 ? '' : 's'} from OpenStreetMap seen on the photo.` : '';
   const n = lines.length;
-  const summary = `${side === 'R' ? 'Right' : 'Left'} curb found${pc.curb_to_curb_ft ? `, ${pc.curb_to_curb_ft} ft curb to curb` : ''}; ${n} painted line${n === 1 ? '' : 's'} (${lines.map(l => `${l.pattern} ${l.color} at ${l.d.toFixed(1)} ft`).join(', ') || 'none'}). Photo confidence ${Math.round(conf * 100)}%.`;
+  const summary = `${side === 'R' ? 'Right' : 'Left'} curb found${pc.curb_to_curb_ft ? `, ${pc.curb_to_curb_ft} ft curb to curb` : ''}; ${n} painted line${n === 1 ? '' : 's'} ${n && n <= 4 ? ` (${lines.map(l => `${l.pattern} ${l.color} at ${l.d.toFixed(1)} ft`).join(', ')})` : n > 4 ? ' (too many to trust: cars or clutter in the photo)' : ''}. Photo confidence ${Math.round(conf * 100)}%.`;
   if (pc.curb_to_curb_ft && pc.width_conf) {
     const pw = pc.curb_to_curb_ft, fin = sec.elements.filter(e => !ROADSIDE.has(e.type)).reduce((a, e) => a + e.width_ft, 0);
     if (Math.abs(pw - fin) > Math.max(4, fin * 0.2)) flags.push(`Curb to curb: the photo measures about ${pw.toFixed(0)} ft, the section totals ${fin} ft. Check the widths.`);

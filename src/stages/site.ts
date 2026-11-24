@@ -95,12 +95,12 @@ export const siteStage: Stage = {
     const locate = async (p: LngLat[]) => {
       const a = await reverseAddress(p[Math.floor(p.length / 2)]);
       if (!a || gen !== live.gen) return;
-      project.update(() => { seg.address = a.address; if (a.city && (!seg.city || seg.cityAuto)) { seg.city = a.city; seg.cityAuto = true; } });
+      project.update(() => { seg.address = a.address; if (a.street && !seg.fromTyped) seg.limits.from = a.street; if (a.city && (!seg.city || seg.cityAuto)) { seg.city = a.city; seg.cityAuto = true; } });
       const c = side.querySelector('#city') as HTMLInputElement | null; if (c && seg.cityAuto) c.value = seg.city ?? '';
       (window as any).__paintAddr?.();
     };
     mv.onPick = at => { clicks.push(at); resnap(); };
-    if (path.length > 1 && !seg.address) locate(path);   // segments drawn before the address lookup existed
+    if (path.length > 1) locate(path);   // segments drawn before the address lookup existed
     mv.setMarks(clicks);
     show(path);
 
@@ -115,7 +115,7 @@ export const siteStage: Stage = {
       seg.settingPinned = !!v;
       if (v) seg.setting = v; else delete seg.existingAuto;   // automatic: the next Existing fill reads land use again
     }));
-    (['from', 'to'] as const).forEach(k => $('#' + k).addEventListener('change', e => project.update(() => { seg.limits[k] = (e.target as HTMLInputElement).value; })));
+    (['from', 'to'] as const).forEach(k => $('#' + k).addEventListener('change', e => project.update(() => { seg.limits[k] = (e.target as HTMLInputElement).value; if (k === 'from') seg.fromTyped = !!seg.limits.from; })));
 
     $('#sf').addEventListener('submit', async e => {
       e.preventDefault();

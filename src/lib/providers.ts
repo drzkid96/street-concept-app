@@ -45,9 +45,9 @@ export function tidyQuery(q: string) {
   return q.replace(/\s+/g, ' ').replace(/\s*(&|@|\/|\+| x | at )\s*/gi, ' and ').replace(/\b(st|ave|blvd|dr|rd)\./gi, '$1').trim();
 }
 async function googleGeocode(q: string): Promise<Place[]> {
-  const u = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(q)}&bounds=32.5,-120.7|35.8,-114.1&region=us&key=${GOOGLE_KEY}`;
-  const j = await fetch(u).then(r => r.json());
-  return (j.results || []).map((p: any) => ({ label: p.formatted_address, at: [p.geometry.location.lng, p.geometry.location.lat] as LngLat, by: 'Google' }));
+  const maps = await loadMaps();
+  const r = await new maps.Geocoder().geocode({ address: q, region: 'us', bounds: { south: 32.5, west: -120.7, north: 35.8, east: -114.1 } }).catch(() => ({ results: [] }));
+  return (r.results || []).map((p: any) => ({ label: p.formatted_address, at: [p.geometry.location.lng(), p.geometry.location.lat()] as LngLat, by: 'Google' }));
 }
 export async function geocode(raw: string): Promise<Place[]> {
   const q = tidyQuery(raw);
@@ -60,12 +60,13 @@ export async function geocode(raw: string): Promise<Place[]> {
   return nominatim(q).catch(() => [] as Place[]);
 }
 // Full address of a point (Google reverse geocoding): street address, city, county.
-export async function reverseAddress([x, y]: LngLat): Promise<{ address: string; city: string } | null> {
+export async function reverseAddress([x, y]: LngLat): Promise<{ address: string; city: string; street: string } | null> {
   try {
-    const j = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${y},${x}&key=${GOOGLE_KEY}`).then(r => r.json());
-    const r0 = j.results?.[0]; if (!r0) return null;
-    const comp = (t: string) => j.results.flatMap((r: any) => r.address_components).find((c: any) => c.types.includes(t))?.long_name;
-    return { address: r0.formatted_address, city: comp('locality') || comp('administrative_area_level_3') || comp('administrative_area_level_2') || '' };
+    const maps = await loadMaps();
+    const r = await new maps.Geocoder().geocode({ location: { lat: y, lng: x } });
+    const r0 = r.results?.[0]; if (!r0) return null;
+    const comp = (t: string) => r.results.flatMap((q: any) => q.address_components).find((c: any) => c.types.includes(t))?.long_name;
+    return { address: r0.formatted_address, city: comp('locality') || comp('administrative_area_level_3') || comp('administrative_area_level_2') || '', street: comp('route') || '' };
   } catch { return null; }
 }
 async function google(q: string): Promise<Place[]> {
@@ -194,4 +195,17 @@ export async function aerialOf(path: LngLat[]): Promise<{ dataUrl: string; cente
   const blob = await fetch(u).then(r => { if (!r.ok) throw new Error(`Google aerial ${r.status}`); return r.blob(); });
   const dataUrl = await new Promise<string>(res => { const fr = new FileReader(); fr.onload = () => res(fr.result as string); fr.readAsDataURL(blob); });
   return { dataUrl, center, zoom, scale: 2 };
+}
+
+// Google Maps JavaScript API (works with the site-restricted key; the Geocoding web service does not).
+let gm: Promise<any> | null = null;
+export function loadMaps(): Promise<any> {
+  return gm ??= new Promise((res, rej) => {
+    (window as any).__gmInit = () => res((window as any).google.maps);
+    (window as any).gm_authFailure = () => { gm = null; rej(new Error('Google refused the key for Street View on this site.')); };
+    const s = document.createElement('script');
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_KEY}&callback=__gmInit&loading=async&v=weekly`;
+    s.onerror = () => { gm = null; rej(new Error('Google Maps could not load.')); };
+    document.head.appendChild(s);
+  });
 }

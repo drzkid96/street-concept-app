@@ -71,7 +71,7 @@ const existing: Stage = {
         autoRunning = '';
         project.update(() => {
           seg.existing = r.section; seg.existingAuto = r; seg.existingChecked = false;
-          if (!seg.limits.from) seg.limits.from = r.osm.street;
+          if (!seg.fromTyped) seg.limits.from = r.osm.street;
           seg.setting = r.scene;
           seg.alternatives.forEach(x => conformTo(x.section, r.section));
         });

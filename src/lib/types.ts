@@ -41,6 +41,7 @@ export interface Segment {
   existing: Section;
   existingChecked?: boolean;
   city?: string; // sets the regional prices
+  fromTyped?: boolean; // street name typed by the person; otherwise it follows the segment
   cityAuto?: boolean; // city filled from the address, not typed
   address?: string; // full address of the segment midpoint (Google)
   settingPinned?: boolean; // frontage chosen by the person; otherwise read from OSM land use
