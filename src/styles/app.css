@@ -55,3 +55,16 @@ td input[type=number]{text-align:right}
 .top{flex-wrap:wrap}
 @media(max-width:600px){.top .proj{margin-left:0;width:100%}.top input{flex:1 1 auto;width:auto}}
 .top .btn{white-space:nowrap;padding:.45rem .75rem}
+.results{list-style:none;margin:.25rem 0 .5rem;padding:0;max-height:180px;overflow:auto}
+.results button{display:block;width:100%;text-align:left;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:.4rem .55rem;margin:.2rem 0;cursor:pointer;font-size:.85rem}
+.results button:hover{border-color:var(--fp-emerald)}
+.sv{margin:.6rem 0;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:.4rem}
+.sv img,.persp img{display:block;width:100%;height:auto;border-radius:6px}
+.sv figcaption,.persp figcaption{font-size:.75rem;color:var(--muted);margin-top:.3rem}
+.drop{display:grid;gap:.2rem;place-items:center;text-align:center;border:2px dashed var(--fp-jade);border-radius:10px;padding:1.1rem;cursor:pointer;background:var(--bg);margin:.6rem 0}
+.drop.over{border-color:var(--fp-orange);background:var(--band)}
+.persp-wrap{padding:1rem;display:grid;gap:1rem}
+.persp{position:relative;margin:0;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:.5rem}
+.persp img{cursor:crosshair}
+.pimg{position:relative}.persp .vp{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.maplibregl-ctrl-attrib{font-family:var(--font)}

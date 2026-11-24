@@ -26,7 +26,9 @@ export interface Segment {
   limits: { from: string; to: string };
   length_ft: number;
   location?: { lat: number; lng: number; heading?: number; pano_id?: string };
-  path?: { lat: number; lng: number }[];
+  path?: [number, number][];
+  grade_pct?: number;
+  perspective?: Perspective;
   curbs: unknown[];
   existing: Section;
   alternatives: Alternative[];
@@ -37,4 +39,13 @@ export interface ProjectFile {
   segments: Segment[];
   review: unknown[];
   standards_version: string;
+}
+
+export interface Perspective {
+  src: string;            // URL or data URL
+  source: string;         // Upload, Google Street View, Panoramax, Mapillary
+  credit?: string;
+  link?: string;
+  heading?: number;
+  vp?: [number, number];  // vanishing point, fraction of image width/height
 }

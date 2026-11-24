@@ -1,7 +1,8 @@
 import { project, uid } from '../lib/project';
 import { sectionSvg } from '../lib/sectionSvg';
 import { sectionEditor } from './sectionEditor';
-import { hasMapsKey, loadMaps, LA } from '../lib/maps';
+import { siteStage } from './site';
+import { visualizeStage } from './visualize';
 import { SSS, PRECEDENCE } from '../lib/standards';
 import type { Alternative } from '../lib/types';
 
@@ -10,53 +11,7 @@ export interface Stage { id: string; name: string; render(side: HTMLElement, can
 const todo = (t: string) => `<div class="todo"><b>To build</b>${t}</div>`;
 const src = () => `<div class="srcbar">Standards: <a href="${SSS}/" target="_blank" rel="noopener">SoCal Super Standards</a>. Precedence: ${PRECEDENCE.join(' → ').replace(/_/g, ' ')}.</div>`;
 
-const site: Stage = {
-  id: 'site', name: 'Site',
-  render(side, canvas) {
-    const seg = project.seg();
-    side.innerHTML = `<h2>1. SITE</h2>
-      <div class="field"><label for="q">Search address or intersection</label><input id="q" placeholder="e.g. Sunset Blvd and Vermont Ave"></div>
-      <div class="field"><label for="from">Limit from</label><input id="from" value="${seg.limits.from}"></div>
-      <div class="field"><label for="to">Limit to</label><input id="to" value="${seg.limits.to}"></div>
-      <p>Segment length: <b id="len">${seg.length_ft ? seg.length_ft.toLocaleString() + "'" : '—'}</b></p>
-      <div class="row"><button class="btn ghost" id="clear">Clear segment</button></div>
-      <p class="note">Click the map to place segment points. Length uses geodesic distance; Roads API snapping comes next.</p>
-      ${todo('Street View capture by pano_id and heading, satellite and key map exports (Street View Static, Maps Static), Roads API snap.')}`;
-    const setLimit = (k: 'from' | 'to') => (e: Event) => project.update(() => { seg.limits[k] = (e.target as HTMLInputElement).value; });
-    side.querySelector('#from')!.addEventListener('change', setLimit('from'));
-    side.querySelector('#to')!.addEventListener('change', setLimit('to'));
-    if (!hasMapsKey()) { canvas.innerHTML = `<div class="empty">Map needs the Google Maps key.<br>Add repo secret VITE_GOOGLE_MAPS_KEY, or .env.local for local dev.</div>`; return; }
-    canvas.innerHTML = `<div class="map" id="map"></div>`;
-    loadMaps().then(async gm => {
-      const map = new gm.Map(canvas.querySelector('#map') as HTMLElement, {
-        center: seg.location ?? LA, zoom: seg.location ? 17 : 12, mapTypeId: 'hybrid', tilt: 0, streetViewControl: true
-      });
-      const line = new gm.Polyline({ map, path: seg.path ?? [], strokeColor: '#6BD688', strokeWeight: 5 });
-      const update = () => {
-        const path = line.getPath().getArray();
-        const m = path.length > 1 ? gm.geometry.spherical.computeLength(path) : 0;
-        project.update(() => {
-          seg.path = path.map(p => ({ lat: p.lat(), lng: p.lng() }));
-          seg.length_ft = Math.round(m * 3.28084);
-          if (path[0]) seg.location = { lat: path[0].lat(), lng: path[0].lng() };
-        });
-        (side.querySelector('#len') as HTMLElement).textContent = seg.length_ft ? seg.length_ft.toLocaleString() + "'" : '—';
-      };
-      map.addListener('click', (e: google.maps.MapMouseEvent) => { if (e.latLng) { line.getPath().push(e.latLng); update(); } });
-      side.querySelector('#clear')!.addEventListener('click', () => { line.setPath([]); update(); });
-      const geocoder = new gm.Geocoder();
-      side.querySelector('#q')!.addEventListener('change', async e => {
-        const q = (e.target as HTMLInputElement).value.trim();
-        if (!q) return;
-        try {
-          const { results } = await geocoder.geocode({ address: q, componentRestrictions: { country: 'US', administrativeArea: 'CA' } });
-          if (results[0]) { map.setCenter(results[0].geometry.location); map.setZoom(18); }
-        } catch { /* no result */ }
-      });
-    }).catch(err => { canvas.innerHTML = `<div class="empty">${String(err.message)}</div>`; });
-  }
-};
-
+const site = siteStage;
 const existing: Stage = {
   id: 'existing', name: 'Existing',
   render(side, canvas) {
@@ -131,7 +86,7 @@ const placeholder = (n: number, id: string, name: string, text: string, skills: 
 
 export const STAGES: Stage[] = [
   site, existing, alts, cost,
-  placeholder(5, 'visualize', 'Visualize', 'Place FP assets per section on Street View, drone or plan view, scaled to the vanishing point; Elevation API for grade; layered SVG and PNG out.', 'fp-render-streetview, fp-render-plan, fp-core-assets'),
+  visualizeStage,
   placeholder(6, 'sheets', 'Sheets', '11x17 landscape sheets with pdf-lib, Albert Sans embedded, automated overlap and clipping check.', 'fp-core-brand, adrian-work-playbook'),
   placeholder(7, 'review', 'Review', 'Markup viewer (callouts, clouds, lines, pen, snap). SEND exports markup JSON to the project; APPROVED locks the revision.', 'fp-core-review'),
   placeholder(8, 'handoff', 'Handoff', 'DXF export in browser; DWG through a LibreDWG service.', 'dxf-to-dwg')
